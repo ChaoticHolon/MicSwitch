@@ -1,33 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- Windows executable: wires the Avalonia UI (MicSwitch.UI) to the Windows platform services (MicSwitch.Windows). -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
-    <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Resources\microphoneEnabled.ico</ApplicationIcon>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <StartupObject>MicSwitch.Program</StartupObject>
-    <!-- WPF0001: ThemeMode (Fluent theme) is still flagged as experimental. -->
-    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" />
-    <PackageReference Include="H.NotifyIcon.Wpf" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" />
-    <PackageReference Include="NAudio" />
+    <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Velopack" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\MicSwitch.Core\MicSwitch.Core.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- Custom Main (Program.cs) so Velopack can handle install/update hooks before WPF starts. -->
-    <ApplicationDefinition Remove="App.xaml" />
-    <Page Include="App.xaml" />
-    <Resource Include="Resources\*.png;Resources\*.ico" />
-    <Content Include="Resources\Notifications\*.wav" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\MicSwitch.UI\MicSwitch.UI.csproj" />
+    <ProjectReference Include="..\MicSwitch.Windows\MicSwitch.Windows.csproj" />
   </ItemGroup>
 </Project>

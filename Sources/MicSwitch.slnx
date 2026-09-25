@@ -1,5 +1,7 @@
 <Solution>
   <Project Path="MicSwitch.Core/MicSwitch.Core.csproj" />
+  <Project Path="MicSwitch.UI/MicSwitch.UI.csproj" />
+  <Project Path="MicSwitch.Windows/MicSwitch.Windows.csproj" />
   <Project Path="MicSwitch/MicSwitch.csproj" />
   <Project Path="MicSwitch.Tests/MicSwitch.Tests.csproj" />
 </Solution>

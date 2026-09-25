@@ -33,7 +33,7 @@ Also it supports configurable mute/unmute sounds(similar to TeamSpeak/Ventrilo) 
 - Three Audio modes: Push-to-talk, Push-to-mute and Toggle mute
 - Overlay visibility could be linked to microphone state, i.e. it will be shown only when Muted/Unmuted
 - Auto-updates via GitHub Releases
-- Light and dark theme (follows Windows by default) on Windows 10 and 11
+- Light and dark theme (follows Windows by default)
 
 ## Media
 ![UI](https://i.imgur.com/Fz0nTZP.png)
@@ -52,7 +52,7 @@ Also it supports configurable mute/unmute sounds(similar to TeamSpeak/Ventrilo) 
 
 ## How to build
 
-Requirements: Windows 10 (version 2004 or later) or Windows 11, and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+Requirements: Windows 10 (version 2004 or later) and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (included with Visual Studio 2026's ".NET desktop development" workload).
 
 ```
 git clone https://github.com/ChaoticHolon/MicSwitch.git
@@ -62,14 +62,18 @@ dotnet test --project MicSwitch.Tests
 dotnet run --project MicSwitch
 ```
 
-No submodules or symlinks are needed any more. `MicSwitch.Core` (settings, hotkey parsing, mute rules) is plain .NET, so its tests also run on Linux and macOS.
+In Visual Studio, open `Sources\MicSwitch.slnx`, set **MicSwitch** as the startup project and run. Start Visual Studio as administrator: the app requests elevation so hotkeys keep working in elevated games.
+
+The UI is built with [Avalonia](https://avaloniaui.net) so it can later run on Linux (KDE Plasma 6 on Wayland is the planned first target). The tests, including headless UI tests, run on Windows and Linux.
 
 ### Project layout
 | Project | Contents |
 | --- | --- |
-| `MicSwitch` | WPF app (.NET 10, Fluent theme): view models (CommunityToolkit.Mvvm), low-level keyboard/mouse hooks, Core Audio control (NAudio), tray icon (H.NotifyIcon), updates (Velopack) |
-| `MicSwitch.Core` | UI-independent logic: settings model and JSON storage, MicSwitch 1.x config migration, hotkey text format, mute rules |
-| `MicSwitch.Tests` | xUnit v3 tests for `MicSwitch.Core` |
+| `MicSwitch.Core` | Platform-independent logic and contracts: settings model and JSON storage, MicSwitch 1.x config import, hotkey text format, mute rules, notification sound library, and the `MicSwitch.Platform` interfaces each OS implements |
+| `MicSwitch.UI` | Avalonia 12 UI (Fluent theme, light/dark): views, view models (CommunityToolkit.Mvvm), tray icon, app composition |
+| `MicSwitch.Windows` | Windows implementations: Core Audio mute/volume (NAudio), low-level keyboard/mouse hooks, WASAPI sound playback, start with Windows, overlay click-through |
+| `MicSwitch` | Windows executable: wires the UI to the Windows services; single instance; Velopack updates |
+| `MicSwitch.Tests` | xUnit v3 tests: core logic plus headless UI tests against fake platform services |
 
 ### Settings
 Settings are stored in `%APPDATA%\MicSwitch\settings.json`, logs in `%APPDATA%\MicSwitch\logs`. On first start, settings from MicSwitch 1.x (`%APPDATA%\MicSwitch\release\config.cfg`) are imported automatically; custom sounds in `%APPDATA%\MicSwitch\Resources\Notifications` keep working.

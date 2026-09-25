@@ -8,10 +8,12 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Avalonia.Headless.XUnit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MicSwitch.Core\MicSwitch.Core.csproj" />
+    <ProjectReference Include="..\MicSwitch.UI\MicSwitch.UI.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,7 @@
-using System.Windows;
-using MicSwitch.Services;
+using Avalonia;
+using MicSwitch.Platform;
+using MicSwitch.Windows;
+using Microsoft.Extensions.DependencyInjection;
 using Velopack;
 
 namespace MicSwitch;
@@ -8,6 +10,7 @@ internal static class Program
 {
     private const string InstanceId = "MicSwitch-{567EBFFF-E391-4B38-AC85-469978EB37C4}";
 
+    // STA is required: Core Audio COM objects are created on the UI thread.
     [STAThread]
     private static void Main(string[] args)
     {
@@ -18,13 +21,38 @@ internal static class Program
         using var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, $@"Local\{InstanceId}-show");
         if (!isFirstInstance)
         {
+            // Ask the running instance to show its window.
             showSignal.Set();
             return;
         }
 
-        var app = new App(args.Contains(StartupService.AutostartArgument, StringComparer.OrdinalIgnoreCase), showSignal);
-        app.InitializeComponent();
-        app.Run();
+        RegisteredWaitHandle? showRegistration = null;
+        var options = new AppOptions
+        {
+            IsAutostart = args.Contains(StartupService.AutostartArgument, StringComparer.OrdinalIgnoreCase),
+            RegisterPlatform = RegisterWindowsServices,
+            RegisterShowRequest = show => showRegistration = ThreadPool.RegisterWaitForSingleObject(
+                showSignal, (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(show), null, Timeout.Infinite, executeOnlyOnce: false),
+        };
+
+        AppBuilder.Configure(() => new App(options))
+            .UsePlatformDetect()
+            .LogToTrace()
+            .StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
+
+        showRegistration?.Unregister(null);
         GC.KeepAlive(mutex);
     }
+
+    // Used by the Avalonia XAML previewer.
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect();
+
+    private static void RegisterWindowsServices(IServiceCollection services) => services
+        .AddSingleton(WindowsPlatform.Capabilities)
+        .AddSingleton<IAudioDevices, AudioDeviceService>()
+        .AddSingleton<IGlobalHotkeys, GlobalHotkeyService>()
+        .AddSingleton<ISoundPlayer, WasapiSoundPlayer>()
+        .AddSingleton<IStartupRegistration, StartupService>()
+        .AddSingleton<IWindowInterop, WindowInterop>()
+        .AddSingleton<IUpdateService, UpdateService>();
 }

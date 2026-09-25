@@ -23,7 +23,7 @@ public enum MouseHotkey
 }
 
 /// <summary>
-/// A keyboard or mouse gesture. <see cref="Key"/> is the name of a WPF <c>System.Windows.Input.Key</c> value,
+/// A keyboard or mouse gesture. <see cref="Key"/> is a key name as used by the WPF and Avalonia <c>Key</c> enums,
 /// kept as a string so this type stays UI-framework independent.
 /// The text format ("Ctrl+Shift+F1", "MouseXButton1") is compatible with MicSwitch 1.x configuration files.
 /// </summary>

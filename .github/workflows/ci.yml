@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,3 +17,14 @@ jobs:
         run: dotnet build Sources/MicSwitch.slnx -c Release
       - name: Test
         run: dotnet test --project Sources/MicSwitch.Tests -c Release --no-build
+
+  # Core logic and the Avalonia UI (headless) are cross-platform; keep them building and passing on Linux.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: Sources/global.json
+      - name: Test
+        run: dotnet test --project Sources/MicSwitch.Tests -c Release

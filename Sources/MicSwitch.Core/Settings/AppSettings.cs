@@ -85,7 +85,7 @@ public sealed class OverlaySettings
 
     public double Opacity { get; set; } = 1;
 
-    /// <summary>Position/size in device-independent pixels; <c>null</c> places it at the default location.</summary>
+    /// <summary>Position in screen pixels and size in device-independent pixels; <c>null</c> uses the default location.</summary>
     public WindowBounds? Bounds { get; set; }
 
     public string? MutedIconPath { get; set; }

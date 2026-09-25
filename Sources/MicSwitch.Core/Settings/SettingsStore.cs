@@ -25,7 +25,15 @@ public sealed class SettingsStore(string directory)
             try
             {
                 using var stream = File.OpenRead(FilePath);
-                return JsonSerializer.Deserialize(stream, SettingsJsonContext.Readable.AppSettings) ?? new AppSettings();
+                var settings = JsonSerializer.Deserialize(stream, SettingsJsonContext.Readable.AppSettings) ?? new AppSettings();
+                if (settings.Version < AppSettings.CurrentVersion)
+                {
+                    // Written by an earlier version: this user has already set things up.
+                    settings.SetupCompleted = true;
+                    settings.Version = AppSettings.CurrentVersion;
+                }
+
+                return settings;
             }
             catch (JsonException)
             {

@@ -1,6 +1,9 @@
-# MicSwitch
+# MicControlNG (formerly MicSwitch)
 
 System-wide microphone mute/unmute with hotkeys, an always-on-top overlay, sounds and a tray icon.
+The product is being renamed to **MicControlNG** ("Mic Control Next Generation"). The UI already uses the name through
+`MainViewModel.AppName`; projects, namespaces, the exe, the settings folder (`%APPDATA%\MicSwitch`) and autostart entries
+still say MicSwitch until the full rename (which must migrate the old settings folder).
 .NET 10, Avalonia 12.1 UI, C# latest. Solution: `Sources/MicSwitch.slnx`.
 
 ## Platform scope
@@ -19,10 +22,18 @@ System-wide microphone mute/unmute with hotkeys, an always-on-top overlay, sound
 | Project | Contents | Rules |
 | --- | --- | --- |
 | `MicSwitch.Core` (net10.0) | Settings model and JSON store (`Settings/`), 1.x config import, `HotkeyGesture` text format, `MuteRules`, `NotificationSounds`, platform contracts (`Platform/PlatformServices.cs`) | No UI or OS dependencies |
-| `MicSwitch.UI` (net10.0) | Avalonia views (`Views/`), view models (`ViewModels/`, CommunityToolkit.Mvvm), controls, theme (`Themes/`), `App.axaml.cs` composition (`RegisterCommonServices`) | Talk to the OS only through the `MicSwitch.Platform` interfaces |
+| `MicSwitch.UI` (net10.0) | Avalonia UI: sidebar shell `Views/MainWindow`, pages in `Views/Pages/` (Home, Extra hotkeys, Sounds, Overlay, About, first-run Setup), `OverlayWindow` + `Controls/OverlayBadge`, `TrayIcon` (right-click menu), one `MainViewModel` split into partial files per page, theme in `Themes/`, composition in `App.axaml.cs` | Talk to the OS only through the `MicSwitch.Platform` interfaces |
 | `MicSwitch.Windows` | Core Audio via NAudio, low-level keyboard/mouse hooks (`GlobalHotkeyService`, `VirtualKeys`), WASAPI playback, autostart (Run key or scheduled task), overlay click-through | Windows-only code goes here |
 | `MicSwitch` | Windows exe: `Program.cs` (single instance, DI registration of Windows services), Velopack `UpdateService`, `app.manifest` | |
 | `MicSwitch.Tests` | xUnit v3: core tests plus headless Avalonia UI tests (`Ui/`, with fakes in `Ui/Fakes.cs`) | |
+
+## Product decisions (from the owner)
+- Default mode is Push-to-talk; Toggle and Push-to-mute are alternatives. "Exclusive hotkey" (suppress) is off by default.
+- Closing the window hides to the tray (a one-time hint explains it); exit via the tray menu. "Start in tray" also makes minimize go to the tray.
+- Extra hotkeys are a dynamic list of key → action rows; the action list hides whatever the main key already does in the current mode.
+- Overlay is a translucent Discord-style badge, positioned by corner presets or "Edit position" (drag); click-through otherwise.
+- The level meter and speaking indicator open the mic (OS "in use" indicator), so the meter only runs while Home/Setup is visible and the speaking indicator is opt-in.
+- Notification sounds must be CC0/public-domain (e.g. Kenney, Freesound CC0), not Pixabay.
 
 ## Conventions
 - Package versions live only in `Sources/Directory.Packages.props`; shared build settings are in `Directory.Build.props`, style in `.editorconfig`.

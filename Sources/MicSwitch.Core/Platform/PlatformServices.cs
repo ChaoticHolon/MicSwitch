@@ -53,6 +53,17 @@ public interface IAudioEndpointGroup : IDisposable
     void Rebind();
 }
 
+/// <summary>Reports the live input level of a microphone (for level meters and the speaking indicator).</summary>
+public interface IInputLevelMonitor
+{
+    /// <summary>
+    /// Starts listening to a capture device (<c>null</c> or <see cref="AppSettings.AllDevices"/> = the default
+    /// communications microphone). <paramref name="onPeak"/> receives peaks 0..1 on a background thread.
+    /// Dispose the result to stop. Opening the device shows the OS "microphone in use" indicator.
+    /// </summary>
+    IDisposable Start(string? deviceId, Action<float> onPeak);
+}
+
 public interface IGlobalHotkeys
 {
     /// <summary>While true (a hotkey editor is capturing input) hotkeys neither fire nor get suppressed.</summary>

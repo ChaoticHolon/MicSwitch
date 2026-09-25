@@ -1,38 +1,14 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:MicSwitch.Controls"
         xmlns:vm="using:MicSwitch.ViewModels"
         x:Class="MicSwitch.Views.OverlayWindow"
         x:DataType="vm:MainViewModel"
-        Title="MicSwitch overlay"
+        Title="MicControlNG overlay"
         WindowDecorations="None" Background="Transparent" TransparencyLevelHint="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" CanResize="False"
-        Width="96" Height="96" MinWidth="24" MinHeight="24" MaxWidth="400" MaxHeight="400"
+        SizeToContent="WidthAndHeight"
         Opacity="{Binding OverlayOpacity}">
-    <Grid>
-        <!-- Frame and drag surface only while unlocked. -->
-        <Border x:Name="Frame" CornerRadius="8" BorderThickness="2" Background="#40000000" Cursor="SizeAll"
-                BorderBrush="{DynamicResource SystemControlHighlightAccentBrush}"
-                IsVisible="{Binding IsOverlayUnlocked}"
-                ToolTip.Tip="Drag to move, drag the corner to resize, double-click to lock">
-            <Border.ContextMenu>
-                <ContextMenu>
-                    <MenuItem Header="Lock overlay" Command="{Binding ToggleOverlayLockCommand}" />
-                    <MenuItem Header="Reset position" Command="{Binding ResetOverlayPositionCommand}" />
-                </ContextMenu>
-            </Border.ContextMenu>
-        </Border>
-        <Image Source="{Binding CurrentIcon}" Margin="6" IsHitTestVisible="False"
-               RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding !ShowOutputIndicator}" />
-        <Viewbox Margin="8" IsHitTestVisible="False" IsVisible="{Binding ShowOutputIndicator}">
-            <Border Background="#C0202020" CornerRadius="12" Padding="10,6">
-                <StackPanel>
-                    <TextBlock Classes="glyph" FontSize="28" Foreground="White" HorizontalAlignment="Center" Text="{Binding OutputIndicatorGlyph}" />
-                    <TextBlock Foreground="White" HorizontalAlignment="Center" Text="{Binding OutputIndicatorText}" />
-                </StackPanel>
-            </Border>
-        </Viewbox>
-        <Border x:Name="Grip" Width="16" Height="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" CornerRadius="0,0,8,0"
-                Background="{DynamicResource SystemControlHighlightAccentBrush}" Cursor="BottomRightCorner"
-                IsVisible="{Binding IsOverlayUnlocked}" ToolTip.Tip="Drag to resize" />
-    </Grid>
+    <c:OverlayBadge x:Name="Badge" Margin="4" Cursor="SizeAll"
+                    ToolTip.Tip="Drag to move. Double-click to finish editing." />
 </Window>

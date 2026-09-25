@@ -16,6 +16,7 @@ internal sealed class TestHarness : IDisposable
     private readonly string directory = Directory.CreateTempSubdirectory("micswitch-ui").FullName;
     private readonly string builtInSounds;
 
+    /// <param name="configure">Adjusts the initial settings; setup is marked complete unless changed here.</param>
     public TestHarness(Action<AppSettings>? configure = null)
     {
         builtInSounds = Path.Combine(directory, "builtin");
@@ -24,12 +25,9 @@ internal sealed class TestHarness : IDisposable
         File.WriteAllBytes(Path.Combine(builtInSounds, "Beep750.wav"), [0]);
 
         var store = new SettingsStore(directory);
-        if (configure is not null)
-        {
-            var initial = new AppSettings();
-            configure(initial);
-            store.Save(initial);
-        }
+        var initial = new AppSettings { SetupCompleted = true };
+        configure?.Invoke(initial);
+        store.Save(initial);
 
         Settings = new SettingsService(store);
         ViewModel = new MainViewModel(
@@ -40,6 +38,7 @@ internal sealed class TestHarness : IDisposable
             Startup,
             new FakeUpdates(),
             Dialogs,
+            LevelMonitor,
             new PlatformCapabilities { CanSuppressHotkeys = true, SupportsMouseHotkeys = true },
             NullLogger<MainViewModel>.Instance);
     }
@@ -53,6 +52,8 @@ internal sealed class TestHarness : IDisposable
     public FakeStartup Startup { get; } = new();
 
     public FakeDialogs Dialogs { get; } = new();
+
+    public FakeLevelMonitor LevelMonitor { get; } = new();
 
     public SettingsService Settings { get; }
 

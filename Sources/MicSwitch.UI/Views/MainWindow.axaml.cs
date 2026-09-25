@@ -50,6 +50,26 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsVisibleProperty)
+        {
+            viewModel.IsWindowVisible = IsVisible && WindowState != WindowState.Minimized;
+        }
+        else if (change.Property == WindowStateProperty)
+        {
+            if (WindowState == WindowState.Minimized && viewModel.StartInTray)
+            {
+                // "Start in tray" users expect minimize to tuck the window away too.
+                WindowState = WindowState.Normal;
+                Hide();
+            }
+
+            viewModel.IsWindowVisible = IsVisible && WindowState != WindowState.Minimized;
+        }
+    }
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         if (WindowState == WindowState.Normal)
@@ -58,10 +78,15 @@ public partial class MainWindow : Window
             settings.ScheduleSave();
         }
 
-        if (!IsExiting && viewModel.MinimizeOnClose)
+        if (!IsExiting)
         {
+            // Closing hides to the tray; exit from the tray icon's menu.
             e.Cancel = true;
             Hide();
+            if (viewModel.ConsumeTrayHint())
+            {
+                new TrayHintWindow().Show();
+            }
         }
 
         base.OnClosing(e);

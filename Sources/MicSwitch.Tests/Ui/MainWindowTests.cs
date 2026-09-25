@@ -14,7 +14,7 @@ public sealed class MainWindowTests
     [AvaloniaFact]
     public void Window_ShowsStatus_AndMuteButtonToggles()
     {
-        using var harness = new TestHarness();
+        using var harness = new TestHarness(s => s.Microphone.MuteMode = MuteMode.ToggleMute);
         var window = new MainWindow(harness.ViewModel, harness.Settings);
         window.Show();
 
@@ -26,6 +26,7 @@ public sealed class MainWindowTests
         Assert.True(harness.Devices.Microphone.Mute);
         Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Microphone muted");
         Assert.Equal(["Beep750"], harness.Sounds.Played);
+        Assert.Equal("Muted", harness.ViewModel.StateLabel);
     }
 
     [AvaloniaFact]
@@ -40,21 +41,35 @@ public sealed class MainWindowTests
     }
 
     [AvaloniaFact]
-    public void Window_HasSettingsTabs()
+    public void Sidebar_NavigatesBetweenPages()
     {
         using var harness = new TestHarness();
         var window = new MainWindow(harness.ViewModel, harness.Settings);
         window.Show();
 
-        var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
-        Assert.Equal(["Microphone", "Hotkeys", "Sounds", "Overlay", "Speakers", "General"], tabs.Items.OfType<TabItem>().Select(t => t.Header as string));
+        var nav = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Classes.Contains("nav"));
+        Assert.Equal(["Home", "Extra hotkeys", "Sounds", "Overlay", "About"], harness.ViewModel.NavItems.Select(n => n.Title));
 
-        foreach (var tab in tabs.Items.OfType<TabItem>())
+        foreach (var item in harness.ViewModel.NavItems)
         {
-            tabs.SelectedItem = tab;
+            nav.SelectedItem = item;
             window.UpdateLayout();
-            Assert.NotEmpty(window.GetVisualDescendants().OfType<SettingRow>());
+            var title = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("pageTitle") && t.IsEffectivelyVisible);
+            Assert.Equal(item.Title, Assert.Single(title).Text, ignoreCase: true);
         }
+    }
+
+    [AvaloniaFact]
+    public void Setup_CoversWindow_UntilSkipped()
+    {
+        using var harness = new TestHarness(s => s.SetupCompleted = false);
+        var window = new MainWindow(harness.ViewModel, harness.Settings);
+        window.Show();
+
+        var setup = window.GetVisualDescendants().OfType<Views.Pages.SetupView>().Single();
+        Assert.True(setup.IsVisible);
+        harness.ViewModel.SkipSetupCommand.Execute(null);
+        Assert.False(setup.IsVisible);
     }
 
     [AvaloniaFact]
@@ -73,7 +88,7 @@ public sealed class MainWindowTests
         using var harness = new TestHarness();
         var window = new MainWindow(harness.ViewModel, harness.Settings);
         window.Show();
-        var box = window.GetVisualDescendants().OfType<HotkeyBox>().First();
+        var box = window.GetVisualDescendants().OfType<HotkeyBox>().First(b => b.IsEffectivelyVisible);
 
         box.Focus();
         box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F5, KeyModifiers = KeyModifiers.Control });
@@ -92,7 +107,7 @@ public sealed class MainWindowTests
         using var harness = new TestHarness();
         var window = new MainWindow(harness.ViewModel, harness.Settings);
         window.Show();
-        var box = window.GetVisualDescendants().OfType<HotkeyBox>().First();
+        var box = window.GetVisualDescendants().OfType<HotkeyBox>().First(b => b.IsEffectivelyVisible);
 
         box.Focus();
         box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.LeftCtrl, KeyModifiers = KeyModifiers.Control });
@@ -110,6 +125,7 @@ public sealed class MainWindowTests
         overlay.SyncVisibility();
 
         Assert.True(overlay.IsVisible);
+        Assert.NotNull(overlay.GetVisualDescendants().OfType<OverlayBadge>().SingleOrDefault());
         harness.ViewModel.OverlayVisibility = OverlayVisibilityMode.Never;
         Assert.False(overlay.IsVisible);
     }

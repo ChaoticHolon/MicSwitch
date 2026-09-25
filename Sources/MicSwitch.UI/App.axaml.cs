@@ -115,7 +115,7 @@ public partial class App : Application
             host.Dispose();
         };
 
-        if (!(options.IsAutostart || settings.Current.Window.StartMinimized))
+        if (!(options.IsAutostart || settings.Current.Window.StartInTray))
         {
             mainWindow.ShowAndActivate();
         }
@@ -130,6 +130,6 @@ public partial class App : Application
         desktop.Shutdown();
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Starting MicSwitch {Version} on {Os}; full hotkey access: {FullAccess}; settings: {SettingsDirectory}; autostart: {IsAutostart}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting MicControlNG {Version} on {Os}; full hotkey access: {FullAccess}; settings: {SettingsDirectory}; autostart: {IsAutostart}")]
     private static partial void LogStarting(ILogger logger, Version? version, OperatingSystem os, bool fullAccess, string settingsDirectory, bool isAutostart);
 }

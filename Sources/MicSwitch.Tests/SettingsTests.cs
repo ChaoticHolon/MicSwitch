@@ -28,6 +28,29 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void Defaults_ArePushToTalk_NonExclusive_AndNeedSetup()
+    {
+        var settings = new SettingsStore(directory).Load();
+
+        Assert.Equal(MuteMode.PushToTalk, settings.Microphone.MuteMode);
+        Assert.False(settings.Microphone.Hotkey.Suppress);
+        Assert.False(settings.SetupCompleted);
+        Assert.Equal(0.85, settings.Overlay.Opacity);
+    }
+
+    [Fact]
+    public void Load_OlderVersionFile_MarksSetupCompleted()
+    {
+        File.WriteAllText(Path.Combine(directory, SettingsStore.FileName), """{ "version": 2, "microphone": { "muteMode": "ToggleMute" } }""");
+
+        var settings = new SettingsStore(directory).Load();
+
+        Assert.True(settings.SetupCompleted);
+        Assert.Equal(AppSettings.CurrentVersion, settings.Version);
+        Assert.Equal(MuteMode.ToggleMute, settings.Microphone.MuteMode);
+    }
+
+    [Fact]
     public void Load_CorruptFile_ReturnsDefaultsAndKeepsCopy()
     {
         var store = new SettingsStore(directory);
@@ -35,7 +58,7 @@ public sealed class SettingsTests : IDisposable
 
         var loaded = store.Load();
 
-        Assert.Equal(MuteMode.ToggleMute, loaded.Microphone.MuteMode);
+        Assert.Equal(MuteMode.PushToTalk, loaded.Microphone.MuteMode);
         Assert.True(File.Exists(store.FilePath + ".corrupt"));
     }
 
@@ -78,20 +101,22 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal(HotkeyGesture.Parse("Ctrl+F1"), settings.Microphone.Hotkey.Key);
         Assert.Equal(MouseHotkey.XButton1, settings.Microphone.Hotkey.AlternativeKey.Mouse);
         Assert.False(settings.Microphone.Hotkey.Suppress);
-        Assert.True(settings.Microphone.AdvancedHotkeysEnabled);
-        Assert.Equal("F9", settings.Microphone.ToggleHotkey.Key.Key);
+        Assert.True(settings.SetupCompleted);
+        var toggle = Assert.Single(settings.ExtraHotkeys, e => e.Action == HotkeyAction.ToggleMute);
+        Assert.True(toggle.IsEnabled);
+        Assert.Equal("F9", toggle.Hotkey.Key.Key);
         Assert.Equal("custom", settings.Notifications.WhenMuted);
         Assert.Equal("Beep300", settings.Notifications.WhenUnmuted);
         Assert.Equal(0.5f, settings.Notifications.Volume);
-        Assert.False(settings.Window.MinimizeOnClose);
-        Assert.True(settings.Window.StartMinimized);
+        Assert.True(settings.Window.StartInTray);
         Assert.Equal(new WindowBounds(100, 50, 600, 680), settings.Window.Bounds);
         Assert.Equal(OverlayVisibilityMode.WhenMuted, settings.Overlay.Visibility);
         Assert.Equal(new WindowBounds(10, 20, 120, 120), settings.Overlay.Bounds);
         Assert.Equal(0.8, settings.Overlay.Opacity, 3);
         Assert.Equal([1, 2, 3], File.ReadAllBytes(settings.Overlay.UnmutedIconPath!));
-        Assert.True(settings.Output.Enabled);
-        Assert.Equal(HotkeyGesture.Parse("Ctrl+Up"), settings.Output.VolumeUpHotkey.Key);
+        var volumeUp = Assert.Single(settings.ExtraHotkeys, e => e.Action == HotkeyAction.SpeakerVolumeUp);
+        Assert.True(volumeUp.IsEnabled);
+        Assert.Equal(HotkeyGesture.Parse("Ctrl+Up"), volumeUp.Hotkey.Key);
         Assert.True(File.Exists(Path.Combine(directory, SettingsStore.FileName)));
     }
 }

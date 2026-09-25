@@ -1,3 +1,5 @@
+using MicSwitch.Settings;
+
 namespace MicSwitch;
 
 public enum MuteMode
@@ -52,5 +54,26 @@ public static class MuteRules
         OverlayVisibilityMode.WhenMuted => isMuted,
         OverlayVisibilityMode.WhenUnmuted => !isMuted,
         _ => false,
+    };
+
+    /// <summary>Microphone mute state after an extra hotkey is pressed or released; <c>null</c> means no change.</summary>
+    public static bool? OnAction(HotkeyAction action, bool isPressed, bool? currentMute) => action switch
+    {
+        HotkeyAction.ToggleMute => isPressed ? !(currentMute ?? false) : null,
+        HotkeyAction.Mute => isPressed ? true : null,
+        HotkeyAction.Unmute => isPressed ? false : null,
+        HotkeyAction.PushToTalk => !isPressed,
+        HotkeyAction.PushToMute => isPressed,
+        _ => null,
+    };
+
+    public static bool IsSpeakerAction(HotkeyAction action) => action is >= HotkeyAction.SpeakerToggleMute and <= HotkeyAction.SpeakerVolumeDown;
+
+    /// <summary>The extra-hotkey action that would duplicate what the main hotkey already does in this mode.</summary>
+    public static HotkeyAction MainActionFor(MuteMode mode) => mode switch
+    {
+        MuteMode.PushToTalk => HotkeyAction.PushToTalk,
+        MuteMode.PushToMute => HotkeyAction.PushToMute,
+        _ => HotkeyAction.ToggleMute,
     };
 }

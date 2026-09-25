@@ -1,3 +1,5 @@
+using MicSwitch.Settings;
+
 namespace MicSwitch.Tests;
 
 public sealed class MuteRulesTests
@@ -35,5 +37,27 @@ public sealed class MuteRulesTests
     public void IsOverlayVisible(OverlayVisibilityMode mode, bool muted, bool expected)
     {
         Assert.Equal(expected, MuteRules.IsOverlayVisible(mode, muted));
+    }
+
+    [Theory]
+    [InlineData(HotkeyAction.ToggleMute, true, false, true)]
+    [InlineData(HotkeyAction.ToggleMute, false, false, null)]
+    [InlineData(HotkeyAction.Mute, true, false, true)]
+    [InlineData(HotkeyAction.Unmute, true, true, false)]
+    [InlineData(HotkeyAction.PushToTalk, true, true, false)]
+    [InlineData(HotkeyAction.PushToMute, false, true, false)]
+    [InlineData(HotkeyAction.SpeakerMute, true, false, null)]
+    public void OnAction(HotkeyAction action, bool pressed, bool current, bool? expected)
+    {
+        Assert.Equal(expected, MuteRules.OnAction(action, pressed, current));
+    }
+
+    [Theory]
+    [InlineData(MuteMode.PushToTalk, HotkeyAction.PushToTalk)]
+    [InlineData(MuteMode.ToggleMute, HotkeyAction.ToggleMute)]
+    [InlineData(MuteMode.PushToMute, HotkeyAction.PushToMute)]
+    public void MainActionFor(MuteMode mode, HotkeyAction expected)
+    {
+        Assert.Equal(expected, MuteRules.MainActionFor(mode));
     }
 }

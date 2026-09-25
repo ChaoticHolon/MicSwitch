@@ -51,6 +51,7 @@ internal static class Program
         .AddSingleton(WindowsPlatform.Capabilities)
         .AddSingleton<IAudioDevices, AudioDeviceService>()
         .AddSingleton<IGlobalHotkeys, GlobalHotkeyService>()
+        .AddSingleton<IInputLevelMonitor, InputLevelMonitor>()
         .AddSingleton<ISoundPlayer, WasapiSoundPlayer>()
         .AddSingleton<IStartupRegistration, StartupService>()
         .AddSingleton<IWindowInterop, WindowInterop>()

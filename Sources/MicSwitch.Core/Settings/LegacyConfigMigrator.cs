@@ -35,7 +35,9 @@ public static class LegacyConfigMigrator
 
     public static AppSettings Migrate(string legacyJson, string? iconDirectory)
     {
-        var settings = new AppSettings();
+        // 1.x defaults: toggle mode and exclusive hotkeys; setup is considered done for existing users.
+        var settings = new AppSettings { SetupCompleted = true };
+        settings.Microphone.MuteMode = MuteMode.ToggleMute;
         var items = JsonNode.Parse(legacyJson, documentOptions: DocumentOptions)?["Items"]?.AsArray() ?? [];
         var configs = items
             .Where(x => x?["TypeName"] is not null && x["ConfigValue"] is JsonObject)
@@ -52,12 +54,12 @@ public static class LegacyConfigMigrator
             mic.Hotkey = Hotkey(hotkeys["Hotkey"]) ?? mic.Hotkey;
             mic.MuteMode = Enum<MuteMode>(hotkeys["MuteMode"]) ?? mic.MuteMode;
             mic.InitialState = Enum<MicrophoneState>(hotkeys["InitialMicrophoneState"]) ?? mic.InitialState;
-            mic.AdvancedHotkeysEnabled = Bool(hotkeys["EnableAdvancedHotkeys"]) ?? false;
-            mic.ToggleHotkey = Hotkey(hotkeys["HotkeyForToggle"]) ?? mic.ToggleHotkey;
-            mic.MuteHotkey = Hotkey(hotkeys["HotkeyForMute"]) ?? mic.MuteHotkey;
-            mic.UnmuteHotkey = Hotkey(hotkeys["HotkeyForUnmute"]) ?? mic.UnmuteHotkey;
-            mic.PushToTalkHotkey = Hotkey(hotkeys["HotkeyForPushToTalk"]) ?? mic.PushToTalkHotkey;
-            mic.PushToMuteHotkey = Hotkey(hotkeys["HotkeyForPushToMute"]) ?? mic.PushToMuteHotkey;
+            var enabled = Bool(hotkeys["EnableAdvancedHotkeys"]) ?? false;
+            AddExtra(settings, HotkeyAction.ToggleMute, hotkeys["HotkeyForToggle"], enabled);
+            AddExtra(settings, HotkeyAction.Mute, hotkeys["HotkeyForMute"], enabled);
+            AddExtra(settings, HotkeyAction.Unmute, hotkeys["HotkeyForUnmute"], enabled);
+            AddExtra(settings, HotkeyAction.PushToTalk, hotkeys["HotkeyForPushToTalk"], enabled);
+            AddExtra(settings, HotkeyAction.PushToMute, hotkeys["HotkeyForPushToMute"], enabled);
         }
 
         if (configs.TryGetValue("MicSwitchOverlayConfig", out var overlay))
@@ -67,14 +69,13 @@ public static class LegacyConfigMigrator
 
         if (configs.TryGetValue("MicSwitchVolumeControlConfig", out var output))
         {
-            var o = settings.Output;
-            o.Enabled = Bool(output["IsEnabled"]) ?? false;
-            o.DeviceId = String(output["DeviceId"]?["LineId"]) ?? o.DeviceId;
-            o.ToggleHotkey = Hotkey(output["HotkeyForToggle"]) ?? o.ToggleHotkey;
-            o.MuteHotkey = Hotkey(output["HotkeyForMute"]) ?? o.MuteHotkey;
-            o.UnmuteHotkey = Hotkey(output["HotkeyForUnmute"]) ?? o.UnmuteHotkey;
-            o.VolumeUpHotkey = Hotkey(output["HotkeyForVolumeUp"]) ?? o.VolumeUpHotkey;
-            o.VolumeDownHotkey = Hotkey(output["HotkeyForVolumeDown"]) ?? o.VolumeDownHotkey;
+            var enabled = Bool(output["IsEnabled"]) ?? false;
+            settings.SpeakerDeviceId = String(output["DeviceId"]?["LineId"]) ?? settings.SpeakerDeviceId;
+            AddExtra(settings, HotkeyAction.SpeakerToggleMute, output["HotkeyForToggle"], enabled);
+            AddExtra(settings, HotkeyAction.SpeakerMute, output["HotkeyForMute"], enabled);
+            AddExtra(settings, HotkeyAction.SpeakerUnmute, output["HotkeyForUnmute"], enabled);
+            AddExtra(settings, HotkeyAction.SpeakerVolumeUp, output["HotkeyForVolumeUp"], enabled);
+            AddExtra(settings, HotkeyAction.SpeakerVolumeDown, output["HotkeyForVolumeDown"], enabled);
         }
 
         return settings;
@@ -116,8 +117,7 @@ public static class LegacyConfigMigrator
         n.Volume = Float(main["NotificationVolume"]) ?? n.Volume;
 
         var w = settings.Window;
-        w.StartMinimized = Bool(main["StartMinimized"]) ?? false;
-        w.MinimizeOnClose = Bool(main["MinimizeOnClose"]) ?? true;
+        w.StartInTray = Bool(main["StartMinimized"]) ?? false;
         w.Bounds = Bounds(main["MainWindowBounds"]);
 
         ApplyOverlay(settings.Overlay, main, iconDirectory);
@@ -131,6 +131,10 @@ public static class LegacyConfigMigrator
     {
         overlay.Visibility = Enum<OverlayVisibilityMode>(source["OverlayVisibilityMode"]) ?? overlay.Visibility;
         overlay.Bounds = Bounds(source["OverlayBounds"]) ?? overlay.Bounds;
+        if (overlay.Visibility != OverlayVisibilityMode.Never)
+        {
+            overlay.LastVisibleMode = overlay.Visibility;
+        }
         if (Float(source["OverlayOpacity"]) is > 0 and var opacity)
         {
             overlay.Opacity = opacity;
@@ -151,6 +155,14 @@ public static class LegacyConfigMigrator
         var path = Path.Combine(directory, fileName);
         File.WriteAllBytes(path, Convert.FromBase64String(base64));
         return path;
+    }
+
+    private static void AddExtra(AppSettings settings, HotkeyAction action, JsonNode? node, bool enabled)
+    {
+        if (Hotkey(node) is { IsEmpty: false } hotkey)
+        {
+            settings.ExtraHotkeys.Add(new ExtraHotkey { Action = action, IsEnabled = enabled, Hotkey = hotkey });
+        }
     }
 
     private static HotkeySettings? Hotkey(JsonNode? node) => node is JsonObject o

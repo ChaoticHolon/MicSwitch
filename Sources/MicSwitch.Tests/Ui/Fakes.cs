@@ -132,6 +132,27 @@ internal sealed class FakeDialogs : IDialogService
     }
 }
 
+internal sealed class FakeLevelMonitor : IInputLevelMonitor
+{
+    private Action<float>? onPeak;
+
+    public int ActiveSessions { get; private set; }
+
+    public IDisposable Start(string? deviceId, Action<float> onPeak)
+    {
+        this.onPeak = onPeak;
+        ActiveSessions++;
+        return new Stop(() => ActiveSessions--);
+    }
+
+    public void Report(float peak) => onPeak?.Invoke(peak);
+
+    private sealed class Stop(Action action) : IDisposable
+    {
+        public void Dispose() => action();
+    }
+}
+
 internal sealed class FakeWindowInterop : IWindowInterop
 {
     public void ConfigureOverlay(nint handle, bool clickThrough)

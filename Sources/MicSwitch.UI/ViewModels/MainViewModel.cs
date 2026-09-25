@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Reflection;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -12,13 +11,26 @@ using Microsoft.Extensions.Logging;
 
 namespace MicSwitch.ViewModels;
 
+public enum Page
+{
+    Home,
+    ExtraHotkeys,
+    Sounds,
+    Overlay,
+    About,
+}
+
+public sealed record NavItem(Page Page, string Title, string Glyph);
+
+/// <summary>
+/// The app's single view model. Split into partial files per page: Home (this file), ExtraHotkeys, Sounds,
+/// Overlay, About and Setup.
+/// </summary>
 public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
+    /// <summary>Product name shown in the UI; change here to rename the app.</summary>
+    public const string AppName = "MicControlNG";
     public const string RepositoryUrl = "https://github.com/ChaoticHolon/MicSwitch";
-    private const string ReleasesUrl = RepositoryUrl + "/releases/latest";
-    private static readonly Bitmap DefaultMutedIcon = LoadAsset("microphoneDisabled.png");
-    private static readonly Bitmap DefaultUnmutedIcon = LoadAsset("microphoneEnabled.png");
-    private const float VolumeStep = 0.02f;
 
     private readonly SettingsService settingsService;
     private readonly IAudioDevices deviceService;
@@ -27,16 +39,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IStartupRegistration startup;
     private readonly IUpdateService updates;
     private readonly IDialogService dialogs;
+    private readonly IInputLevelMonitor levelMonitor;
     private readonly ILogger<MainViewModel> logger;
     private readonly IAudioEndpointGroup microphone;
     private readonly IAudioEndpointGroup speakers;
-    private readonly DispatcherTimer outputIndicatorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
-    private readonly DispatcherTimer volumeRepeatTimer = new() { Interval = TimeSpan.FromMilliseconds(60) };
-    private float volumeRepeatStep;
     private readonly List<IDisposable> hotkeyRegistrations = [];
     private bool? lastMute;
-    private float? lastSpeakerVolume;
-    private bool? lastSpeakerMute;
     private bool isRebinding;
 
     public MainViewModel(
@@ -47,6 +55,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IStartupRegistration startup,
         IUpdateService updates,
         IDialogService dialogs,
+        IInputLevelMonitor levelMonitor,
         PlatformCapabilities capabilities,
         ILogger<MainViewModel> logger)
     {
@@ -57,51 +66,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         this.startup = startup;
         this.updates = updates;
         this.dialogs = dialogs;
-        Capabilities = capabilities;
+        this.levelMonitor = levelMonitor;
         this.logger = logger;
+        Capabilities = capabilities;
 
-        var s = Settings;
-        MainHotkey = Editor("Hotkey", s.Microphone.Hotkey);
-        AdvancedHotkeys =
-        [
-            Editor("Toggle", s.Microphone.ToggleHotkey),
-            Editor("Mute", s.Microphone.MuteHotkey),
-            Editor("Unmute", s.Microphone.UnmuteHotkey),
-            Editor("Push-to-talk", s.Microphone.PushToTalkHotkey),
-            Editor("Push-to-mute", s.Microphone.PushToMuteHotkey),
-        ];
-        SpeakerHotkeys =
-        [
-            Editor("Toggle mute", s.Output.ToggleHotkey),
-            Editor("Mute", s.Output.MuteHotkey),
-            Editor("Unmute", s.Output.UnmuteHotkey),
-            Editor("Volume up", s.Output.VolumeUpHotkey),
-            Editor("Volume down", s.Output.VolumeDownHotkey),
-        ];
+        MainHotkey = Editor("Main hotkey", Settings.Microphone.Hotkey);
+        foreach (var extra in Settings.ExtraHotkeys)
+        {
+            ExtraHotkeys.Add(CreateExtraHotkey(extra));
+        }
 
+        SelectedNav = NavItems[0];
         microphone = deviceService.CreateGroup(AudioFlow.Capture);
         speakers = deviceService.CreateGroup(AudioFlow.Render);
-        volumeRepeatTimer.Tick += (_, _) => speakers.Volume = (speakers.Volume ?? 0) + volumeRepeatStep;
         microphone.StateChanged += (_, _) => OnMicrophoneStateChanged();
         speakers.StateChanged += (_, _) => OnSpeakerStateChanged();
         deviceService.DevicesChanged += (_, _) => RefreshDeviceLists();
-        outputIndicatorTimer.Tick += (_, _) =>
-        {
-            outputIndicatorTimer.Stop();
-            ShowOutputIndicator = false;
-        };
+        InitializeOverlay();
+        InitializeLevelMeter();
 
         RefreshDeviceLists();
         RefreshSounds();
         RefreshIcons();
-        Rebind(microphone, s.Microphone.DeviceId);
-        Rebind(speakers, s.Output.DeviceId);
-        if (MuteRules.InitialMute(s.Microphone.MuteMode, s.Microphone.InitialState) is { } initialMute)
+
+        // No notification sounds for state set up at launch (e.g. push-to-talk starting muted).
+        isRebinding = true;
+        Rebind(microphone, Settings.Microphone.DeviceId);
+        Rebind(speakers, Settings.SpeakerDeviceId);
+        if (MuteRules.InitialMute(Settings.Microphone.MuteMode, Settings.Microphone.InitialState) is { } initialMute)
         {
             microphone.Mute = initialMute;
         }
 
         ApplyMicrophoneVolume();
+        isRebinding = false;
         ApplyHotkeys();
         lastMute = microphone.Mute;
         OnMicrophoneStateChanged();
@@ -111,10 +109,51 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public PlatformCapabilities Capabilities { get; }
 
-    public string VersionText { get; } = $"Version {Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3)}";
+    public string Title => AppName;
 
+    // ---------------------------------------------------------------- Navigation
 
-    // ---------------------------------------------------------------- Microphone
+    public IReadOnlyList<NavItem> NavItems { get; } =
+    [
+        new(Page.Home, "Home", ""),
+        new(Page.ExtraHotkeys, "Extra hotkeys", ""),
+        new(Page.Sounds, "Sounds", ""),
+        new(Page.Overlay, "Overlay", ""),
+        new(Page.About, "About", ""),
+    ];
+
+    [ObservableProperty]
+    public partial NavItem SelectedNav { get; set; }
+
+    public Page CurrentPage => SelectedNav.Page;
+
+    public bool IsHomePage => CurrentPage == Page.Home;
+
+    public bool IsExtraHotkeysPage => CurrentPage == Page.ExtraHotkeys;
+
+    public bool IsSoundsPage => CurrentPage == Page.Sounds;
+
+    public bool IsOverlayPage => CurrentPage == Page.Overlay;
+
+    public bool IsAboutPage => CurrentPage == Page.About;
+
+    public void Navigate(Page page) => SelectedNav = NavItems.First(n => n.Page == page);
+
+    [RelayCommand]
+    private void GoToExtraHotkeys() => Navigate(Page.ExtraHotkeys);
+
+    partial void OnSelectedNavChanged(NavItem value)
+    {
+        OnPropertyChanged(nameof(CurrentPage));
+        OnPropertyChanged(nameof(IsHomePage));
+        OnPropertyChanged(nameof(IsExtraHotkeysPage));
+        OnPropertyChanged(nameof(IsSoundsPage));
+        OnPropertyChanged(nameof(IsOverlayPage));
+        OnPropertyChanged(nameof(IsAboutPage));
+        UpdateLevelMonitoring();
+    }
+
+    // ---------------------------------------------------------------- Microphone status
 
     public ObservableCollection<AudioDeviceInfo> Microphones { get; } = [];
 
@@ -131,6 +170,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Settings.Microphone.DeviceId = value;
             Rebind(microphone, value);
             ApplyMicrophoneVolume();
+            RestartLevelMonitoring();
             Save();
         }
     }
@@ -138,6 +178,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public bool? IsMuted => microphone.Mute;
 
     public bool IsMicrophoneConnected => microphone.IsConnected;
+
+    public bool IsMutedState => IsMuted == true;
+
+    public bool IsLiveState => IsMuted == false;
+
+    public string StatusGlyph => IsMuted == true ? "" : "";
+
+    public string StateLabel => IsMuted switch
+    {
+        true => "Muted",
+        false => "Live",
+        null => "No microphone",
+    };
 
     public string MicrophoneStatus => IsMuted switch
     {
@@ -151,19 +204,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public string ToggleMuteText => IsMuted == true ? "Unmute" : "Mute";
 
-    public bool IsMutedState => IsMuted == true;
-
-    public bool IsLiveState => IsMuted == false;
-
-    public string StatusGlyph => IsMuted == true ? "\uEC54" : "\uE720";
-
     public Bitmap CurrentIcon => IsMuted == true ? MutedIcon : UnmutedIcon;
+
+    [RelayCommand]
+    private void ToggleMute() => SetMute(!(microphone.Mute ?? false));
+
+    // ---------------------------------------------------------------- Mode and main hotkey
 
     public IReadOnlyList<Choice> MuteModes { get; } =
     [
-        new(MuteMode.ToggleMute, "Toggle", "Each hotkey press switches between muted and live"),
-        new(MuteMode.PushToTalk, "Push-to-talk", "Live only while the hotkey is held"),
-        new(MuteMode.PushToMute, "Push-to-mute", "Muted only while the hotkey is held"),
+        new(MuteMode.PushToTalk, "Push-to-talk", "You're muted until you hold the key"),
+        new(MuteMode.ToggleMute, "Toggle", "Each key press switches between muted and live"),
+        new(MuteMode.PushToMute, "Push-to-mute", "You're live until you hold the key"),
     ];
 
     public MuteMode MuteMode
@@ -171,21 +223,52 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         get => Settings.Microphone.MuteMode;
         set
         {
-            if (SetProperty(Settings.Microphone.MuteMode, value, Settings.Microphone, (m, v) => m.MuteMode = v))
+            if (!SetAndSave(Settings.Microphone.MuteMode, value, v => Settings.Microphone.MuteMode = v))
             {
-                OnPropertyChanged(nameof(IsToggleMode));
-                OnPropertyChanged(nameof(MicrophoneStatusDetail));
-                if (MuteRules.InitialMute(value, InitialState) is { } mute)
-                {
-                    microphone.Mute = mute;
-                }
+                return;
+            }
 
-                Save();
+            OnPropertyChanged(nameof(IsToggleMode));
+            OnPropertyChanged(nameof(MicrophoneStatusDetail));
+            OnPropertyChanged(nameof(MainHotkeyLabel));
+            OnPropertyChanged(nameof(MainHotkeyDescription));
+            OnPropertyChanged(nameof(ModeDescription));
+            OnPropertyChanged(nameof(GetStartedText));
+            foreach (var extra in ExtraHotkeys)
+            {
+                extra.RefreshActions();
+            }
+
+            if (MuteRules.InitialMute(value, InitialState) is { } mute)
+            {
+                microphone.Mute = mute;
             }
         }
     }
 
+    public string ModeDescription => MuteModes.First(m => Equals(m.Value, MuteMode)).Description ?? string.Empty;
+
     public bool IsToggleMode => MuteMode == MuteMode.ToggleMute;
+
+    public HotkeyEditorViewModel MainHotkey { get; }
+
+    public bool HasMainHotkey => !MainHotkey.Settings.IsEmpty;
+
+    public string MainHotkeyLabel => MuteMode switch
+    {
+        MuteMode.PushToTalk => "Push-to-talk key",
+        MuteMode.PushToMute => "Push-to-mute key",
+        _ => "Toggle key",
+    };
+
+    public string MainHotkeyDescription => MuteMode switch
+    {
+        MuteMode.PushToTalk => "Hold to talk",
+        MuteMode.PushToMute => "Hold to mute yourself",
+        _ => "Press to switch between muted and live",
+    };
+
+    public string GetStartedText => $"Choose a {MainHotkeyLabel.ToLowerInvariant()} to get started. Click the box below, then press the key or mouse button you want to use.";
 
     public IReadOnlyList<Choice> InitialStates { get; } =
     [
@@ -200,21 +283,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set => SetAndSave(Settings.Microphone.InitialState, value, v => Settings.Microphone.InitialState = v);
     }
 
-    public HotkeyEditorViewModel MainHotkey { get; }
-
-    public IReadOnlyList<HotkeyEditorViewModel> AdvancedHotkeys { get; }
-
-    public bool AdvancedHotkeysEnabled
-    {
-        get => Settings.Microphone.AdvancedHotkeysEnabled;
-        set
-        {
-            if (SetAndSave(Settings.Microphone.AdvancedHotkeysEnabled, value, v => Settings.Microphone.AdvancedHotkeysEnabled = v))
-            {
-                ApplyHotkeys();
-            }
-        }
-    }
+    // ---------------------------------------------------------------- Input volume
 
     public bool MicrophoneVolumeControlEnabled
     {
@@ -240,201 +309,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
-    private void ToggleMute() => SetMute(!(microphone.Mute ?? false));
-
-    // ---------------------------------------------------------------- Sounds
-
-    public ObservableCollection<Choice> SoundOptions { get; } = [];
-
-    public ObservableCollection<Choice> PlaybackDevices { get; } = [];
-
-    // Dropdown values use "" for "None"/"Default device": a null SelectedValue would show an empty selection.
-    public string SoundWhenMuted
-    {
-        get => Settings.Notifications.WhenMuted ?? string.Empty;
-        set => SetAndSave(Settings.Notifications.WhenMuted, NullIfEmpty(value), v => Settings.Notifications.WhenMuted = v);
-    }
-
-    public string SoundWhenUnmuted
-    {
-        get => Settings.Notifications.WhenUnmuted ?? string.Empty;
-        set => SetAndSave(Settings.Notifications.WhenUnmuted, NullIfEmpty(value), v => Settings.Notifications.WhenUnmuted = v);
-    }
-
-    /// <summary>Notification volume in percent.</summary>
-    public double NotificationVolume
-    {
-        get => Settings.Notifications.Volume * 100;
-        set => SetAndSave(Settings.Notifications.Volume, (float)(value / 100), v => Settings.Notifications.Volume = v);
-    }
-
-    public string PlaybackDeviceId
-    {
-        get => Settings.Notifications.OutputDeviceId ?? string.Empty;
-        set => SetAndSave(Settings.Notifications.OutputDeviceId, NullIfEmpty(value), v => Settings.Notifications.OutputDeviceId = v);
-    }
-
-    [RelayCommand]
-    private Task PlaySound(string? name) => PlayNotification(NullIfEmpty(name) ?? Settings.Notifications.WhenMuted ?? Settings.Notifications.WhenUnmuted);
-
-    [RelayCommand]
-    private async Task AddSound()
-    {
-        var file = await dialogs.PickFileAsync("Add notification sound", "Audio files", ["*.wav", "*.mp3", "*.m4a", "*.wma", "*.aac"]);
-        if (file is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var name = await Task.Run(() => sounds.Add(file));
-            RefreshSounds();
-            if (Settings.Notifications.WhenMuted is null)
-            {
-                SoundWhenMuted = name;
-            }
-            StatusMessage = $"Added sound \"{name}\".";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or InvalidOperationException)
-        {
-            StatusMessage = $"Could not add sound: {ex.Message}";
-        }
-    }
-
-    // ---------------------------------------------------------------- Overlay
-
-    public IReadOnlyList<Choice> OverlayVisibilityModes { get; } =
-    [
-        new(OverlayVisibilityMode.Always, "Always"),
-        new(OverlayVisibilityMode.WhenMuted, "When muted"),
-        new(OverlayVisibilityMode.WhenUnmuted, "When live"),
-        new(OverlayVisibilityMode.Never, "Never"),
-    ];
-
-    public OverlayVisibilityMode OverlayVisibility
-    {
-        get => Settings.Overlay.Visibility;
-        set
-        {
-            if (SetAndSave(Settings.Overlay.Visibility, value, v => Settings.Overlay.Visibility = v))
-            {
-                OnPropertyChanged(nameof(IsOverlayVisible));
-                OnPropertyChanged(nameof(IsOverlayEnabled));
-            }
-        }
-    }
-
-    public bool IsOverlayEnabled => OverlayVisibility != OverlayVisibilityMode.Never;
-
-    /// <summary>An unlocked overlay stays visible so it can be positioned.</summary>
-    public bool IsOverlayVisible => IsOverlayEnabled && (!IsOverlayLocked || MuteRules.IsOverlayVisible(OverlayVisibility, IsMuted == true));
-
-    public bool IsOverlayLocked
-    {
-        get => Settings.Overlay.IsLocked;
-        set
-        {
-            if (SetAndSave(Settings.Overlay.IsLocked, value, v => Settings.Overlay.IsLocked = v))
-            {
-                OnPropertyChanged(nameof(IsOverlayUnlocked));
-                OnPropertyChanged(nameof(IsOverlayVisible));
-            }
-        }
-    }
-
-    public bool IsOverlayUnlocked
-    {
-        get => !IsOverlayLocked;
-        set => IsOverlayLocked = !value;
-    }
-
-    public double OverlayOpacity
-    {
-        get => Settings.Overlay.Opacity;
-        set => SetAndSave(Settings.Overlay.Opacity, Math.Clamp(value, 0.1, 1), v => Settings.Overlay.Opacity = v);
-    }
-
-    [ObservableProperty]
-    public partial Bitmap MutedIcon { get; private set; } = DefaultMutedIcon;
-
-    [ObservableProperty]
-    public partial Bitmap UnmutedIcon { get; private set; } = DefaultUnmutedIcon;
-
-    [ObservableProperty]
-    public partial bool ShowOutputIndicator { get; private set; }
-
-    public string OutputIndicatorGlyph => speakers.Mute == true ? "" : "";
-
-    public string OutputIndicatorText => speakers.Mute == true ? "Muted" : $"{SpeakerVolume:0}%";
-
-    /// <summary>Raised when the overlay should move back to its default position.</summary>
-    public event EventHandler? OverlayResetRequested;
-
-    [RelayCommand]
-    private void ToggleOverlayLock() => IsOverlayLocked = !IsOverlayLocked;
-
-    [RelayCommand]
-    private void ResetOverlayPosition()
-    {
-        Settings.Overlay.Bounds = null;
-        OverlayResetRequested?.Invoke(this, EventArgs.Empty);
-        Save();
-    }
-
-    [RelayCommand]
-    private Task SelectMutedIcon() => SelectIcon("muted", p => Settings.Overlay.MutedIconPath = p);
-
-    [RelayCommand]
-    private Task SelectUnmutedIcon() => SelectIcon("unmuted", p => Settings.Overlay.UnmutedIconPath = p);
-
-    [RelayCommand]
-    private void ResetIcons()
-    {
-        Settings.Overlay.MutedIconPath = null;
-        Settings.Overlay.UnmutedIconPath = null;
-        RefreshIcons();
-        Save();
-    }
-
-    // ---------------------------------------------------------------- Speakers
-
-    public ObservableCollection<AudioDeviceInfo> Speakers { get; } = [];
-
-    public bool SpeakerControlEnabled
-    {
-        get => Settings.Output.Enabled;
-        set
-        {
-            if (SetAndSave(Settings.Output.Enabled, value, v => Settings.Output.Enabled = v))
-            {
-                ApplyHotkeys();
-            }
-        }
-    }
-
-    public string SelectedSpeakerId
-    {
-        get => Settings.Output.DeviceId;
-        set
-        {
-            if (value is not null && SetAndSave(Settings.Output.DeviceId, value, v => Settings.Output.DeviceId = v))
-            {
-                Rebind(speakers, value);
-            }
-        }
-    }
-
-    public double SpeakerVolume
-    {
-        get => (speakers.Volume ?? 0) * 100;
-        set => speakers.Volume = (float)(value / 100);
-    }
-
-    public IReadOnlyList<HotkeyEditorViewModel> SpeakerHotkeys { get; }
-
-    // ---------------------------------------------------------------- General
+    // ---------------------------------------------------------------- Quick settings (Home)
 
     public IReadOnlyList<Choice> Themes { get; } =
     [
@@ -473,94 +348,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool StartMinimized
+    public bool StartInTray
     {
-        get => Settings.Window.StartMinimized;
-        set => SetAndSave(Settings.Window.StartMinimized, value, v => Settings.Window.StartMinimized = v);
+        get => Settings.Window.StartInTray;
+        set => SetAndSave(Settings.Window.StartInTray, value, v => Settings.Window.StartInTray = v);
     }
-
-    public bool MinimizeOnClose
-    {
-        get => Settings.Window.MinimizeOnClose;
-        set => SetAndSave(Settings.Window.MinimizeOnClose, value, v => Settings.Window.MinimizeOnClose = v);
-    }
-
-    public bool CheckForUpdates
-    {
-        get => Settings.CheckForUpdates;
-        set => SetAndSave(Settings.CheckForUpdates, value, v => Settings.CheckForUpdates = v);
-    }
-
-    [ObservableProperty]
-    public partial string? UpdateVersion { get; private set; }
 
     [ObservableProperty]
     public partial string? StatusMessage { get; set; }
 
     [RelayCommand]
-    private async Task CheckUpdates()
-    {
-        if (!updates.IsInstalled)
-        {
-            StatusMessage = "This copy isn't installed, so it can't update itself. Opening the releases page instead.";
-            await dialogs.OpenAsync(ReleasesUrl);
-            return;
-        }
-
-        try
-        {
-            UpdateVersion = await updates.CheckAsync();
-            StatusMessage = UpdateVersion is null ? "MicSwitch is up to date." : null;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException)
-        {
-            StatusMessage = $"Update check failed: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private async Task InstallUpdate()
-    {
-        try
-        {
-            await updates.DownloadAndRestartAsync();
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException)
-        {
-            StatusMessage = $"Update failed: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private Task OpenDataFolder() => dialogs.OpenAsync(settingsService.Directory);
-
-    [RelayCommand]
-    private Task OpenProjectPage() => dialogs.OpenAsync(RepositoryUrl);
-
-    [RelayCommand]
     private void DismissStatus() => StatusMessage = null;
 
-    /// <summary>Runs an update check on startup when enabled; failures are silent.</summary>
-    public async Task CheckForUpdatesOnStartupAsync()
+    /// <summary>True the first time the window is closed, so the UI can explain that the app keeps running.</summary>
+    public bool ConsumeTrayHint()
     {
-        if (!CheckForUpdates || !updates.IsInstalled)
+        if (Settings.Window.TrayHintShown)
         {
-            return;
+            return false;
         }
 
-        try
-        {
-            UpdateVersion = await updates.CheckAsync();
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException)
-        {
-            LogUpdateCheckFailed(ex);
-        }
+        Settings.Window.TrayHintShown = true;
+        Save();
+        return true;
     }
 
     public void Dispose()
     {
         hotkeyRegistrations.ForEach(r => r.Dispose());
+        StopLevelMonitoring();
         microphone.Dispose();
         speakers.Dispose();
     }
@@ -572,6 +388,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         settings,
         () =>
         {
+            OnPropertyChanged(nameof(HasMainHotkey));
             ApplyHotkeys();
             Save();
         },
@@ -584,41 +401,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         hotkeyRegistrations.Clear();
         var mic = Settings.Microphone;
         Register(mic.Hotkey, pressed => SetMute(MuteRules.OnMainHotkey(mic.MuteMode, pressed, microphone.Mute)));
-        if (mic.AdvancedHotkeysEnabled)
+        foreach (var extra in Settings.ExtraHotkeys.Where(e => e.IsEnabled))
         {
-            Register(mic.ToggleHotkey, pressed => SetMute(pressed ? !(microphone.Mute ?? false) : null));
-            Register(mic.MuteHotkey, pressed => SetMute(pressed ? true : null));
-            Register(mic.UnmuteHotkey, pressed => SetMute(pressed ? false : null));
-            Register(mic.PushToTalkHotkey, pressed => SetMute(!pressed));
-            Register(mic.PushToMuteHotkey, pressed => SetMute(pressed));
+            var action = extra.Action;
+            Register(extra.Hotkey, pressed => RunAction(action, pressed));
         }
 
-        var output = Settings.Output;
-        if (output.Enabled)
-        {
-            Register(output.ToggleHotkey, pressed => speakers.Mute = pressed ? !(speakers.Mute ?? false) : null);
-            Register(output.MuteHotkey, pressed => speakers.Mute = pressed ? true : null);
-            Register(output.UnmuteHotkey, pressed => speakers.Mute = pressed ? false : null);
-            Register(output.VolumeUpHotkey, pressed => RepeatVolumeStep(pressed, VolumeStep));
-            Register(output.VolumeDownHotkey, pressed => RepeatVolumeStep(pressed, -VolumeStep));
-        }
-
-        LogHotkeysApplied(mic.MuteMode, mic.Hotkey.Key, mic.Hotkey.AlternativeKey, mic.AdvancedHotkeysEnabled, output.Enabled);
+        var extraCount = hotkeyRegistrations.Count - 1;
+        LogHotkeysApplied(mic.MuteMode, mic.Hotkey.Key, mic.Hotkey.AlternativeKey, extraCount);
 
         void Register(HotkeySettings settings, Action<bool> handler) => hotkeyRegistrations.Add(hotkeys.Register(settings, handler));
-    }
-
-    private void RepeatVolumeStep(bool pressed, float step)
-    {
-        volumeRepeatTimer.Stop();
-        if (!pressed)
-        {
-            return;
-        }
-
-        volumeRepeatStep = step;
-        speakers.Volume = (speakers.Volume ?? 0) + step;
-        volumeRepeatTimer.Start();
     }
 
     private void SetMute(bool? mute)
@@ -631,6 +423,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void Rebind(IAudioEndpointGroup group, string deviceId)
     {
+        var wasRebinding = isRebinding;
         isRebinding = true;
         try
         {
@@ -645,7 +438,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            isRebinding = false;
+            isRebinding = wasRebinding;
         }
     }
 
@@ -660,7 +453,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void OnMicrophoneStateChanged()
     {
         var mute = microphone.Mute;
-        if (!isRebinding && lastMute is not null && mute is not null && mute != lastMute)
+        if (!isRebinding && lastMute is not null && mute is not null && mute != lastMute && Settings.Notifications.Enabled)
         {
             _ = PlayNotification(mute.Value ? Settings.Notifications.WhenMuted : Settings.Notifications.WhenUnmuted);
         }
@@ -668,32 +461,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         lastMute = mute ?? lastMute;
         OnPropertyChanged(nameof(IsMuted));
         OnPropertyChanged(nameof(IsMicrophoneConnected));
-        OnPropertyChanged(nameof(MicrophoneStatus));
-        OnPropertyChanged(nameof(MicrophoneStatusDetail));
-        OnPropertyChanged(nameof(ToggleMuteText));
         OnPropertyChanged(nameof(IsMutedState));
         OnPropertyChanged(nameof(IsLiveState));
         OnPropertyChanged(nameof(StatusGlyph));
+        OnPropertyChanged(nameof(StateLabel));
+        OnPropertyChanged(nameof(MicrophoneStatus));
+        OnPropertyChanged(nameof(MicrophoneStatusDetail));
+        OnPropertyChanged(nameof(ToggleMuteText));
         OnPropertyChanged(nameof(CurrentIcon));
         OnPropertyChanged(nameof(IsOverlayVisible));
         OnPropertyChanged(nameof(MicrophoneVolume));
-    }
-
-    private void OnSpeakerStateChanged()
-    {
-        var (volume, mute) = (speakers.Volume, speakers.Mute);
-        var changed = volume != lastSpeakerVolume || mute != lastSpeakerMute;
-        if (changed && !isRebinding && lastSpeakerVolume is not null && SpeakerControlEnabled)
-        {
-            ShowOutputIndicator = true;
-            outputIndicatorTimer.Stop();
-            outputIndicatorTimer.Start();
-        }
-
-        (lastSpeakerVolume, lastSpeakerMute) = (volume, mute);
-        OnPropertyChanged(nameof(SpeakerVolume));
-        OnPropertyChanged(nameof(OutputIndicatorGlyph));
-        OnPropertyChanged(nameof(OutputIndicatorText));
+        OnPropertyChanged(nameof(IsSpeaking));
     }
 
     private void RefreshDeviceLists()
@@ -729,55 +507,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void RefreshSounds()
-    {
-        var (muted, unmuted) = (Settings.Notifications.WhenMuted, Settings.Notifications.WhenUnmuted);
-        var names = sounds.GetNames();
-        SoundOptions.Clear();
-        SoundOptions.Add(new(string.Empty, "None"));
-        names.ToList().ForEach(n => SoundOptions.Add(new(n, n)));
-
-        // Sound names are case-insensitive (they're file names); use the listed spelling so the dropdown matches.
-        (Settings.Notifications.WhenMuted, Settings.Notifications.WhenUnmuted) = (Canonical(muted), Canonical(unmuted));
-
-        string? Canonical(string? name) => names.FirstOrDefault(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase)) ?? name;
-        OnPropertyChanged(nameof(SoundWhenMuted));
-        OnPropertyChanged(nameof(SoundWhenUnmuted));
-    }
-
-    private void RefreshIcons()
-    {
-        MutedIcon = LoadImage(Settings.Overlay.MutedIconPath) ?? DefaultMutedIcon;
-        UnmutedIcon = LoadImage(Settings.Overlay.UnmutedIconPath) ?? DefaultUnmutedIcon;
-        OnPropertyChanged(nameof(CurrentIcon));
-    }
-
-    private async Task SelectIcon(string name, Action<string> assign)
-    {
-        var file = await dialogs.PickFileAsync("Choose an icon", "Images", ["*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.ico"]);
-        if (file is null)
-        {
-            return;
-        }
-
-        if (LoadImage(file) is not { } preview)
-        {
-            StatusMessage = "That file isn't an image MicSwitch can read.";
-            return;
-        }
-
-        preview.Dispose();
-
-        // Copy so the icon keeps working if the original file is moved.
-        var directory = Path.Combine(settingsService.Directory, "Icons");
-        Directory.CreateDirectory(directory);
-        var target = Path.Combine(directory, name + Path.GetExtension(file));
-        File.Copy(file, target, overwrite: true);
-        assign(target);
-        RefreshIcons();
-        Save();
-    }
-
     private static Bitmap LoadAsset(string name)
     {
         using var stream = AssetLoader.Open(new Uri($"avares://MicSwitch.UI/Assets/{name}"));
@@ -803,8 +532,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void Save() => settingsService.ScheduleSave();
 
-    private Task PlayNotification(string? name) => sounds.PlayAsync(name, Settings.Notifications.Volume, Settings.Notifications.OutputDeviceId);
-
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     private bool SetAndSave<T>(T current, T value, Action<T> assign, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
@@ -820,12 +547,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         return true;
     }
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Hotkeys applied: mode {Mode}, main {MainHotkey} / {AlternativeHotkey}, {ExtraCount} extra")]
+    private partial void LogHotkeysApplied(MuteMode mode, Hotkeys.HotkeyGesture mainHotkey, Hotkeys.HotkeyGesture alternativeHotkey, int extraCount);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Audio devices: {Microphones} microphones, {Speakers} speakers; selected microphone {Selected}")]
+    private partial void LogDevices(int microphones, int speakers, string selected);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Update check failed")]
     private partial void LogUpdateCheckFailed(Exception exception);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Hotkeys applied: mode {Mode}, main {MainHotkey} / {AlternativeHotkey}, additional {Additional}, speakers {Speakers}")]
-    private partial void LogHotkeysApplied(MuteMode mode, Hotkeys.HotkeyGesture mainHotkey, Hotkeys.HotkeyGesture alternativeHotkey, bool additional, bool speakers);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Audio devices: {Microphones} microphone entries, {Speakers} speakers; selected microphone {Selected}")]
-    private partial void LogDevices(int microphones, int speakers, string selected);
 }

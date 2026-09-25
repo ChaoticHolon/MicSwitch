@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MicSwitch.ViewModels"
+        x:Class="MicSwitch.Views.TrayHintWindow"
+        Title="{x:Static vm:MainViewModel.AppName}"
+        SizeToContent="WidthAndHeight" CanResize="False" Topmost="True"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource PageBackgroundBrush}">
+    <StackPanel Margin="24" Spacing="12" MaxWidth="420">
+        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Still running in the tray" />
+        <TextBlock TextWrapping="Wrap" Text="MicControlNG keeps working in the background so your hotkeys stay active. Find it in the notification area near the clock: click the icon to open this window, or right-click it for quick controls and Exit." />
+        <Button HorizontalAlignment="Right" Classes="accent" MinWidth="90" Content="Got it" Click="OnOk" IsDefault="True" />
+    </StackPanel>
+</Window>

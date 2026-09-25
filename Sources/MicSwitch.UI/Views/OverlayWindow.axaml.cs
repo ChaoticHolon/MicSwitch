@@ -9,13 +9,13 @@ using MicSwitch.ViewModels;
 
 namespace MicSwitch.Views;
 
-/// <summary>Always-on-top microphone indicator. When locked it is click-through; unlocked it can be dragged and resized.</summary>
+/// <summary>Always-on-top microphone badge. Click-through unless its position is being edited.</summary>
 public partial class OverlayWindow : Window
 {
-    private const double DefaultSize = 96;
     private readonly MainViewModel viewModel;
     private readonly SettingsService settings;
     private readonly IWindowInterop interop;
+    private readonly bool isConstructed;
 
     public OverlayWindow(MainViewModel viewModel, SettingsService settings, IWindowInterop interop)
     {
@@ -24,34 +24,18 @@ public partial class OverlayWindow : Window
         this.interop = interop;
         DataContext = viewModel;
         InitializeComponent();
+        ToolTip.SetServiceEnabled(Badge, false);
 
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
-        viewModel.OverlayResetRequested += (_, _) => PlaceAtDefault();
-        Frame.PointerPressed += OnFramePointerPressed;
-        Grip.PointerPressed += (_, e) =>
-        {
-            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-            {
-                BeginResizeDrag(WindowEdge.SouthEast, e);
-                e.Handled = true;
-            }
-        };
+        viewModel.OverlayPlacementRequested += (_, _) => Place();
+        Badge.PointerPressed += OnBadgePointerPressed;
         PositionChanged += (_, _) => SaveBounds();
         Opened += (_, _) =>
         {
-            if (settings.Current.Overlay.Bounds is { } b)
-            {
-                (Width, Height) = (b.Width, b.Width);
-                Position = new PixelPoint((int)b.Left, (int)b.Top);
-            }
-
-            if (settings.Current.Overlay.Bounds is null || !WindowPlacement.IsOnScreen(this, new Size(Width, Height)))
-            {
-                PlaceAtDefault();
-            }
-
-            ApplyLockState();
+            Place();
+            ApplyEditState();
         };
+        isConstructed = true;
     }
 
     public void SyncVisibility()
@@ -69,40 +53,37 @@ public partial class OverlayWindow : Window
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ClientSizeProperty)
+        // Property changes also arrive from the base constructor, before our fields are set.
+        if (isConstructed && change.Property == ClientSizeProperty && settings.Current.Overlay.Bounds is null)
         {
-            // Keep the overlay square.
-            if (Math.Abs(Height - Width) > 0.5)
-            {
-                Height = Width;
-            }
-
-            SaveBounds();
+            // Keep corner-anchored overlays in their corner when the size or label changes.
+            Place();
         }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.IsOverlayVisible))
+        switch (e.PropertyName)
         {
-            SyncVisibility();
-        }
-        else if (e.PropertyName == nameof(MainViewModel.IsOverlayLocked))
-        {
-            ApplyLockState();
+            case nameof(MainViewModel.IsOverlayVisible):
+                SyncVisibility();
+                break;
+            case nameof(MainViewModel.IsOverlayEditing):
+                ApplyEditState();
+                break;
         }
     }
 
-    private void OnFramePointerPressed(object? sender, PointerPressedEventArgs e)
+    private void OnBadgePointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (!viewModel.IsOverlayEditing || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
         }
 
         if (e.ClickCount == 2)
         {
-            viewModel.IsOverlayLocked = true;
+            viewModel.IsOverlayEditing = false;
         }
         else
         {
@@ -110,20 +91,38 @@ public partial class OverlayWindow : Window
         }
     }
 
-    private void ApplyLockState() => interop.ConfigureOverlay(TryGetPlatformHandle()?.Handle ?? 0, viewModel.IsOverlayLocked);
-
-    private void PlaceAtDefault()
+    private void ApplyEditState()
     {
-        (Width, Height) = (DefaultSize, DefaultSize);
+        ToolTip.SetServiceEnabled(Badge, viewModel.IsOverlayEditing);
+        interop.ConfigureOverlay(TryGetPlatformHandle()?.Handle ?? 0, clickThrough: !viewModel.IsOverlayEditing);
+    }
+
+    private void Place()
+    {
+        if (settings.Current.Overlay.Bounds is { } b)
+        {
+            Position = new PixelPoint((int)b.Left, (int)b.Top);
+            if (WindowPlacement.IsOnScreen(this, Bounds.Size))
+            {
+                return;
+            }
+
+            settings.Current.Overlay.Bounds = null;
+        }
+
         var area = WindowPlacement.PrimaryWorkingArea(this);
-        var size = PixelSize.FromSize(new Size(DefaultSize, DefaultSize), RenderScaling);
-        var margin = (int)(24 * RenderScaling);
-        Position = new PixelPoint(area.Right - size.Width - margin, area.Y + margin);
+        var size = PixelSize.FromSize(Bounds.Size, RenderScaling);
+        var margin = (int)(16 * RenderScaling);
+        var corner = settings.Current.Overlay.Corner;
+        var x = corner is OverlayCorner.TopLeft or OverlayCorner.BottomLeft ? area.X + margin : area.Right - size.Width - margin;
+        var y = corner is OverlayCorner.TopLeft or OverlayCorner.TopRight ? area.Y + margin : area.Bottom - size.Height - margin;
+        Position = new PixelPoint(x, y);
     }
 
     private void SaveBounds()
     {
-        if (!IsVisible)
+        // Only a user drag (edit mode) pins the overlay to an exact position.
+        if (!IsVisible || !viewModel.IsOverlayEditing)
         {
             return;
         }

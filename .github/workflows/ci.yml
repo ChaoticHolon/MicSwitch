@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: Sources/global.json
+      - name: Build
+        run: dotnet build Sources/MicSwitch.slnx -c Release
+      - name: Test
+        run: dotnet test --project Sources/MicSwitch.Tests -c Release --no-build

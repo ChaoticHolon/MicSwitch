@@ -19,7 +19,7 @@ Also it supports configurable mute/unmute sounds(similar to TeamSpeak/Ventrilo) 
 [![Requests](https://feathub.com/iXab3r/MicSwitch?format=svg)](https://feathub.com/iXab3r/MicSwitch)
 
 # Installation
-- You can download the latest version of installer here - [download](https://github.com/iXab3r/MicSwitch/releases/latest).
+- You can download the latest version of installer here - [download](https://github.com/ChaoticHolon/MicSwitch/releases/latest).
 - After initial installation application will periodically check Github for updates
 
 ## Features
@@ -32,7 +32,8 @@ Also it supports configurable mute/unmute sounds(similar to TeamSpeak/Ventrilo) 
 - Auto-startup (could be Minimized by default)
 - Three Audio modes: Push-to-talk, Push-to-mute and Toggle mute
 - Overlay visibility could be linked to microphone state, i.e. it will be shown only when Muted/Unmuted
-- Auto-updates via Github
+- Auto-updates via GitHub Releases
+- Light and dark theme (follows Windows by default) on Windows 10 and 11
 
 ## Media
 ![UI](https://i.imgur.com/Fz0nTZP.png)
@@ -49,34 +50,29 @@ Also it supports configurable mute/unmute sounds(similar to TeamSpeak/Ventrilo) 
 ### Auto-update via Github
 ![Auto-update via Github](https://i.imgur.com/O4SIuDy.gif)
 
-## How to build application
-* I am extensively using [git-submodules](https://git-scm.com/docs/git-submodule "git-submodules") so you may have to run extra commands (git submodule update) if your git-client does not fully support this tech. I would highly recommend to use [Git Extensions](https://gitextensions.github.io/ "Git Extensions") which is awesome, free and open-source and makes submodules integration seamless
-* The main "catch-up-moment" is that you need to run InitSymlinks.cmd before building an application - this is due to the fact that git symlinks are not supported on some older versions of Windows and I am using them to create links to submodules
-* I am usually using [Jetbrains Rider](https://www.jetbrains.com/rider/ "Jetbrains Rider") so there MAY be some issues if you are using Microsoft Visual Studio, although I am trying to keep things compatible
+## How to build
 
-### Build from command line
-1. git clone https://github.com/iXab3r/MicSwitch.git
-2. cd MicSwitch
-3. remove submodule DeploymentTools - MicSwitch's installer built and oublished as a part of another project and it's not included into this repository
-4. git submodule init 
-5. git submodule update --checkout
-6. InitSymlinks.cmd
-7. dotnet build Sources/MicSwitch
+Requirements: Windows 10 (version 2004 or later) or Windows 11, and the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
-That's it. Portable version will be in **bin** folder. Framework-dependent version
+```
+git clone https://github.com/ChaoticHolon/MicSwitch.git
+cd MicSwitch/Sources
+dotnet build MicSwitch.slnx
+dotnet test --project MicSwitch.Tests
+dotnet run --project MicSwitch
+```
 
-## Linux/MacOS Support ?
-Probably not going to happen in the nearest future because in it's core MicSwitch is a WPF application, technology that Microsoft does not want to port at all.
-Migrating to something cross-platform like Avalon, Xamarin is an option, but not a cheap one, unfortunately I don't have so much spare time to do it now.
+No submodules or symlinks are needed any more. `MicSwitch.Core` (settings, hotkey parsing, mute rules) is plain .NET, so its tests also run on Linux and macOS.
 
-Meanwhile you could take a look at
-### MacOS
-**MuteKey** (thanks to benpeter for finding it): https://apps.apple.com/us/app/mutekey/id1509590766?mt=12
+### Project layout
+| Project | Contents |
+| --- | --- |
+| `MicSwitch` | WPF app (.NET 10, Fluent theme): view models (CommunityToolkit.Mvvm), low-level keyboard/mouse hooks, Core Audio control (NAudio), tray icon (H.NotifyIcon), updates (Velopack) |
+| `MicSwitch.Core` | UI-independent logic: settings model and JSON storage, MicSwitch 1.x config migration, hotkey text format, mute rules |
+| `MicSwitch.Tests` | xUnit v3 tests for `MicSwitch.Core` |
 
-### Linux
-???
+### Settings
+Settings are stored in `%APPDATA%\MicSwitch\settings.json`, logs in `%APPDATA%\MicSwitch\logs`. On first start, settings from MicSwitch 1.x (`%APPDATA%\MicSwitch\release\config.cfg`) are imported automatically; custom sounds in `%APPDATA%\MicSwitch\Resources\Notifications` keep working.
 
-## Contacts
-- Feel free to contact me via PM in Discord *Xab3r#3780* or [Reddit](https://www.reddit.com/user/Xab3r) 
-- [Discord chat](https://discord.gg/BExRm22 "Discord chat")
-- [Issues tracker](https://github.com/iXab3r/MicSwitch/issues)
+### Releasing
+Push a tag like `v2.0.0`. The `Release` workflow publishes a self-contained build and uses [Velopack](https://velopack.io) to create the installer and the update feed on GitHub Releases, which installed copies check for updates.

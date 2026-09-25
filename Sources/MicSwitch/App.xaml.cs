@@ -1,264 +1,116 @@
-﻿using System.Reflection;
-using System.Runtime.Versioning;
 using System.Windows;
-using MicSwitch.MainWindow.Models;
-using MicSwitch.MainWindow.ViewModels;
-using MicSwitch.Modularity;
-using MicSwitch.Prism;
+using System.Windows.Threading;
+using MicSwitch.Controls;
 using MicSwitch.Services;
-using PoeShared.Squirrel.Prism;
-using PoeShared.Squirrel.Updater;
-using Unity.Resolution;
+using MicSwitch.Settings;
+using MicSwitch.ViewModels;
+using MicSwitch.Views;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
-namespace MicSwitch
+namespace MicSwitch;
+
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Disposed in OnExit; Application has no Dispose.")]
+public partial class App : Application
 {
-    /// <summary>
-    ///     Interaction logic for App.xaml
-    /// </summary>
-    [SupportedOSPlatform("Windows10.0.20348.0")]
-    public partial class App : ApplicationBase
+    private readonly bool isAutostart;
+    private readonly EventWaitHandle showSignal;
+    private IHost? host;
+    private TrayIcon? trayIcon;
+    private RegisteredWaitHandle? showSignalRegistration;
+
+    public App(bool isAutostart, EventWaitHandle showSignal)
     {
-        public readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(10);
-
-        private void InitializeContainer()
-        {
-            Container.AddNewExtensionIfNotExists<UpdaterRegistrations>();
-
-            Container
-                .RegisterSingleton<IOutputControllerViewModel, OutputControllerViewModel>()
-                .RegisterSingleton<IMicSwitchOverlayViewModel, MicSwitchOverlayViewModel>()
-                .RegisterSingleton<IComplexHotkeyTracker, ComplexHotkeyTracker>()
-                .RegisterSingleton<IMicrophoneControllerViewModel, MicrophoneControllerViewModel>()
-                .RegisterSingleton<IMainWindowViewModel, MainWindowViewModel>()
-                .RegisterSingleton<IImageProvider, ImageProvider>()
-                .RegisterSingleton<IConfigProvider, ConfigProviderFromFile>();
-
-            Container
-                .RegisterType<IMMDeviceControllerEx, ComplexMMDeviceController>()
-                .RegisterType<IHotkeyEditorViewModel, HotkeyEditorViewModel>();
-        }
-
-        private void InitializeUpdateSettings()
-        {
-            var updateSourceProvider = Container.Resolve<IUpdateSourceProvider>();
-            Log.Debug($"Reconfiguring {nameof(UpdateSettingsConfig)}, current update source: {updateSourceProvider.UpdateSource}");
-            updateSourceProvider.KnownSources = UpdateSettings.WellKnownUpdateSources;
-            Log.Debug(() => $"Update source provider {updateSourceProvider}, active: {updateSourceProvider.UpdateSource}, known sources: {updateSourceProvider.KnownSources.DumpToString()}");
-        }
-
-        private void SingleInstanceValidationRoutine(bool retryIfAbandoned)
-        {
-            var appArguments = Container.Resolve<IAppArguments>();
-            var mutexId = $"MicSwitch{(appArguments.IsDebugMode ? "DEBUG" : "RELEASE")}{{567EBFFF-E391-4B38-AC85-469978EB37C4}}";
-            Log.Debug($"Acquiring mutex {mutexId} (retryIfAbandoned: {retryIfAbandoned})...");
-            try
-            {
-                var mutex = new Mutex(true, mutexId);
-                if (mutex.WaitOne(StartupTimeout))
-                {
-                    Log.Debug($"Mutex {mutexId} was successfully acquired");
-
-                    AppDomain.CurrentDomain.DomainUnload += delegate
-                    {
-                        Log.Debug($"[App.DomainUnload] Detected DomainUnload, disposing mutex {mutexId}");
-                        mutex.ReleaseMutex();
-                        Log.Debug("[App.DomainUnload] Mutex was successfully disposed");
-                    };
-                }
-                else
-                {
-                    Log.Error($"Application is already running, mutex: {mutexId}");
-                    ShowShutdownWarning();
-                }
-            }
-            catch (AbandonedMutexException ex)
-            {
-                Log.Debug($"Mutex is abandoned {mutexId} (retryIfAbandoned: {retryIfAbandoned})", ex);
-                if (retryIfAbandoned)
-                {
-                    SingleInstanceValidationRoutine(false);
-                }
-            }
-        }
-
-        private void ShowShutdownWarning()
-        {
-            var assemblyName = Assembly.GetExecutingAssembly().GetName();
-            var window = MainWindow;
-            var title = $"{assemblyName.Name} v{assemblyName.Version}";
-            var message = "Application is already running !";
-            if (window != null)
-            {
-                MessageBox.Show(window, message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            else
-            {
-                MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-
-            Log.Warn("Shutting down...");
-            Environment.Exit(0);
-        }
-
-        protected override void OnStartup(StartupEventArgs e)
-        {
-            base.OnStartup(e);
-
-            InitializeContainer();
-
-            using var sw = new BenchmarkTimer("MainWindow initialization routine", Log);
-            Log.Info($"Application startup detected, PID: {Process.GetCurrentProcess().Id}");
-
-            Log.Debug("Resolving squirrel events handler");
-            var squirrelEventsHandler = Container.Resolve<ISquirrelEventsHandler>();
-            Log.Debug(() => $"Resolved squirrel events handler: {squirrelEventsHandler}");
-
-            SingleInstanceValidationRoutine(true);
-
-            var configProvider = Container.Resolve<IConfigProvider>();
-            if (configProvider is ConfigProviderFromFile fromFile)
-            {
-                Log.Debug("Loading initial configuration");
-                var defaultConfigProviderStrategy = Container.Resolve<UseDefaultIfFailureConfigProviderStrategy>();
-                fromFile.RegisterStrategy(defaultConfigProviderStrategy);
-                fromFile.Reload();
-            }
-
-            Log.Debug("Initial configuration loaded");
-
-            InitializeUpdateSettings();
-
-            sw.Step("Actualizing configuration format");
-            Log.Debug("Initializing config provider");
-            var hotkeyConfigProvider = Container.Resolve<IConfigProvider<MicSwitchHotkeyConfig>>();
-            var overlayConfigProvider = Container.Resolve<IConfigProvider<MicSwitchOverlayConfig>>();
-            var mainConfigProvider = Container.Resolve<IConfigProvider<MicSwitchConfig>>();
-            ActualizeConfig(mainConfigProvider, hotkeyConfigProvider);
-            ActualizeConfig(mainConfigProvider, overlayConfigProvider);
-            ActualizeConfig(mainConfigProvider);
-
-            sw.Step("Registering overlay");
-            var overlayController = Container.Resolve<IOverlayWindowController>(WellKnownWindows.AllWindows);
-            var overlayViewModelFactory = Container.Resolve<IFactory<IMicSwitchOverlayViewModel, IOverlayWindowController>>();
-            var overlayViewModel = overlayViewModelFactory.Create(overlayController).AddTo(Anchors);
-
-            var mainWindow = Container.Resolve<MainWindow.Views.MainWindow>();
-            Current.MainWindow = mainWindow;
-            sw.Step($"Main window view initialized");
-
-            var viewController = new WindowViewController(mainWindow);
-            var mainWindowViewModel = Container.Resolve<IMainWindowViewModel>(
-                new DependencyOverride<IWindowViewController>(viewController),
-                new DependencyOverride<IOverlayWindowController>(overlayController)).AddTo(Anchors);
-            sw.Step($"Main window view model resolved");
-            mainWindow.DataContext = mainWindowViewModel;
-            sw.Step($"Main window view model assigned");
-            mainWindow.Show();
-            sw.Step($"Main window shown");
-        }
-
-        private void ActualizeConfig(IConfigProvider<MicSwitchConfig> mainConfigProvider)
-        {
-            Log.Debug($"Actualizing configuration format of {mainConfigProvider}");
-            var config = mainConfigProvider.ActualConfig.CloneJson();
-            if (config.Notification != null)
-            {
-                config.Notifications = new TwoStateNotification
-                {
-                    // initial configuration contained reversed values
-                    Off = config.Notification.Value.On,
-                    On = config.Notification.Value.Off
-                };
-                config.Notification = null;
-            }
-
-            mainConfigProvider.Save(config);
-            Log.Debug("Config format updated successfully");
-        }
-
-        private void ActualizeConfig(IConfigProvider<MicSwitchConfig> mainConfigProvider, IConfigProvider<MicSwitchHotkeyConfig> hotkeyConfigProvider)
-        {
-            Log.Debug($"Actualizing configuration format of {hotkeyConfigProvider}");
-
-            var mainConfig = mainConfigProvider.ActualConfig.CloneJson();
-            if (mainConfig.SuppressHotkey == null)
-            {
-                Log.Debug("Main configuration is up-to-date");
-                return;
-            }
-
-            Log.Warn($"Main configuration is obsolete, converting to a newer format: {new {mainConfig.MicrophoneHotkey, mainConfig.MicrophoneHotkeyAlt, mainConfig.SuppressHotkey}}");
-            var config = hotkeyConfigProvider.ActualConfig.CloneJson();
-            config.Hotkey = new HotkeyConfig()
-            {
-                Key = mainConfig.MicrophoneHotkey,
-                AlternativeKey = mainConfig.MicrophoneHotkeyAlt,
-                Suppress = mainConfig.SuppressHotkey ?? true
-            };
-            if (mainConfig.MuteMode != null)
-            {
-                config.MuteMode = mainConfig.MuteMode.Value;
-            }
-
-            hotkeyConfigProvider.Save(config);
-
-            mainConfig.MicrophoneHotkey = null;
-            mainConfig.MicrophoneHotkeyAlt = null;
-            mainConfig.SuppressHotkey = null;
-            mainConfig.MuteMode = null;
-            mainConfigProvider.Save(mainConfig);
-            Log.Debug("Config format updated successfully");
-        }
-
-        private void ActualizeConfig(IConfigProvider<MicSwitchConfig> mainConfigProvider, IConfigProvider<MicSwitchOverlayConfig> overlayConfigProvider)
-        {
-            Log.Debug($"Actualizing configuration format of {overlayConfigProvider}");
-
-            var mainConfig = mainConfigProvider.ActualConfig.CloneJson();
-            if (mainConfig.OverlayBounds == null)
-            {
-                Log.Debug("Main configuration is up-to-date");
-                return;
-            }
-
-            Log.Warn($"Main configuration is obsolete, converting to a newer format: {new {mainConfig.OverlayBounds, mainConfig.OverlayEnabled}}");
-            var config = overlayConfigProvider.ActualConfig.CloneJson();
-            if (mainConfig.OverlayBounds != null)
-            {
-                config.OverlayBounds = mainConfig.OverlayBounds.Value;
-            }
-
-            if (mainConfig.OverlayEnabled != null)
-            {
-                config.OverlayVisibilityMode = mainConfig.OverlayEnabled == false ? OverlayVisibilityMode.Never : OverlayVisibilityMode.Always;
-            }
-
-            if (mainConfig.OverlayOpacity != null)
-            {
-                config.OverlayOpacity = mainConfig.OverlayOpacity.Value;
-            }
-
-            if (mainConfig.MicrophoneIcon != null)
-            {
-                config.MicrophoneIcon = mainConfig.MicrophoneIcon;
-            }
-
-            if (mainConfig.MutedMicrophoneIcon != null)
-            {
-                config.MutedMicrophoneIcon = mainConfig.MutedMicrophoneIcon;
-            }
-
-            overlayConfigProvider.Save(config);
-
-            mainConfig.OverlayBounds = null;
-            mainConfig.OverlayEnabled = null;
-            mainConfig.OverlayOpacity = null;
-            mainConfig.OverlayLocation = null;
-            mainConfig.OverlaySize = null;
-            mainConfig.MicrophoneIcon = null;
-            mainConfig.MutedMicrophoneIcon = null;
-            mainConfigProvider.Save(mainConfig);
-            Log.Debug("Config format updated successfully");
-        }
+        this.isAutostart = isAutostart;
+        this.showSignal = showSignal;
     }
+
+    public static void ApplyTheme(AppTheme theme)
+    {
+        Current.ThemeMode = theme switch
+        {
+            AppTheme.Light => ThemeMode.Light,
+            AppTheme.Dark => ThemeMode.Dark,
+            _ => ThemeMode.System,
+        };
+    }
+
+    protected override async void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
+        builder.Logging.AddDebug().AddProvider(new FileLoggerProvider(Path.Combine(SettingsStore.DefaultDirectory, "logs")));
+        builder.Services
+            .AddSingleton(Dispatcher)
+            .AddSingleton<SettingsService>()
+            .AddSingleton<AudioDeviceService>()
+            .AddSingleton<GlobalHotkeyService>()
+            .AddSingleton<NotificationSoundService>()
+            .AddSingleton<StartupService>()
+            .AddSingleton<UpdateService>()
+            .AddSingleton<MainViewModel>()
+            .AddSingleton<MainWindow>()
+            .AddSingleton<OverlayWindow>();
+        host = builder.Build();
+
+        var services = host.Services;
+        var logger = services.GetRequiredService<ILogger<App>>();
+        DispatcherUnhandledException += (_, args) =>
+        {
+            LogUnhandled(logger, args.Exception);
+            args.Handled = true;
+        };
+
+        var settings = services.GetRequiredService<SettingsService>();
+        ApplyTheme(settings.Current.Window.Theme);
+
+        var hotkeys = services.GetRequiredService<GlobalHotkeyService>();
+        HotkeyBox.CapturingChanged += (_, capturing) => hotkeys.IsPaused = capturing;
+
+        var viewModel = services.GetRequiredService<MainViewModel>();
+        var mainWindow = services.GetRequiredService<MainWindow>();
+        MainWindow = mainWindow;
+        trayIcon = new TrayIcon(viewModel, mainWindow.ShowAndActivate, ExitApplication);
+        services.GetRequiredService<OverlayWindow>().SyncVisibility();
+
+        // A second launch signals this instance to bring its window forward.
+        showSignalRegistration = ThreadPool.RegisterWaitForSingleObject(
+            showSignal, (_, _) => Dispatcher.BeginInvoke(mainWindow.ShowAndActivate), null, Timeout.Infinite, executeOnlyOnce: false);
+
+        if (!(isAutostart || settings.Current.Window.StartMinimized))
+        {
+            mainWindow.ShowAndActivate();
+        }
+
+        await viewModel.CheckForUpdatesOnStartupAsync();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        showSignalRegistration?.Unregister(null);
+        trayIcon?.Dispose();
+        if (host is not null)
+        {
+            host.Services.GetRequiredService<SettingsService>().Flush();
+            host.Dispose();
+        }
+
+        base.OnExit(e);
+    }
+
+    private void ExitApplication()
+    {
+        if (MainWindow is MainWindow window)
+        {
+            window.IsExiting = true;
+            window.Close();
+        }
+
+        Shutdown();
+    }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Unhandled UI exception")]
+    private static partial void LogUnhandled(ILogger logger, Exception exception);
 }

@@ -30,6 +30,8 @@ public sealed class AppOptions
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Disposed on lifetime exit; Application has no Dispose.")]
 public partial class App : Application
 {
+    private static readonly Version? AppVersion = typeof(App).Assembly.GetName().Version;
+    private static readonly OperatingSystem OsVersion = Environment.OSVersion;
     private readonly AppOptions? options;
     private IHost? host;
     private TrayIcon? trayIcon;
@@ -89,6 +91,12 @@ public partial class App : Application
 
         var services = host.Services;
         var settings = services.GetRequiredService<SettingsService>();
+        var capabilities = services.GetRequiredService<PlatformCapabilities>();
+        var logger = services.GetRequiredService<ILogger<App>>();
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            LogStarting(logger, AppVersion, OsVersion, capabilities.LimitationNotice is null, settings.Directory, options.IsAutostart);
+        }
         ApplyTheme(settings.Current.Window.Theme);
 
         var hotkeys = services.GetRequiredService<IGlobalHotkeys>();
@@ -121,4 +129,7 @@ public partial class App : Application
         window.Close();
         desktop.Shutdown();
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Starting MicSwitch {Version} on {Os}; full hotkey access: {FullAccess}; settings: {SettingsDirectory}; autostart: {IsAutostart}")]
+    private static partial void LogStarting(ILogger logger, Version? version, OperatingSystem os, bool fullAccess, string settingsDirectory, bool isAutostart);
 }

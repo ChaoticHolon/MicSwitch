@@ -603,6 +603,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             Register(output.VolumeDownHotkey, pressed => RepeatVolumeStep(pressed, -VolumeStep));
         }
 
+        LogHotkeysApplied(mic.MuteMode, mic.Hotkey.Key, mic.Hotkey.AlternativeKey, mic.AdvancedHotkeysEnabled, output.Enabled);
+
         void Register(HotkeySettings settings, Action<bool> handler) => hotkeyRegistrations.Add(hotkeys.Register(settings, handler));
     }
 
@@ -711,6 +713,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Settings.Notifications.OutputDeviceId = playbackId;
         OnPropertyChanged(nameof(PlaybackDeviceId));
         OnPropertyChanged(nameof(MicrophoneStatusDetail));
+        LogDevices(Microphones.Count - 1, outputs.Count, SelectedMicrophoneId);
 
         void Replace(ObservableCollection<AudioDeviceInfo> target, AudioDeviceInfo[] items, string selectedId, string selectedProperty)
         {
@@ -819,4 +822,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Update check failed")]
     private partial void LogUpdateCheckFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Hotkeys applied: mode {Mode}, main {MainHotkey} / {AlternativeHotkey}, additional {Additional}, speakers {Speakers}")]
+    private partial void LogHotkeysApplied(MuteMode mode, Hotkeys.HotkeyGesture mainHotkey, Hotkeys.HotkeyGesture alternativeHotkey, bool additional, bool speakers);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Audio devices: {Microphones} microphone entries, {Speakers} speakers; selected microphone {Selected}")]
+    private partial void LogDevices(int microphones, int speakers, string selected);
 }

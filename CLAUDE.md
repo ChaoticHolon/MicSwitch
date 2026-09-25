@@ -22,14 +22,15 @@ System-wide microphone mute/unmute with hotkeys, an always-on-top overlay, sound
 | Project | Contents | Rules |
 | --- | --- | --- |
 | `MicControlNG.Core` (net10.0) | Settings model and JSON store (`Settings/`), 1.x config import, `HotkeyGesture` text format, `MuteRules`, `NotificationSounds`, platform contracts (`Platform/PlatformServices.cs`) | No UI or OS dependencies |
-| `MicControlNG.UI` (net10.0) | Avalonia UI: sidebar shell `Views/MainWindow`, pages in `Views/Pages/` (Home, Extra hotkeys, Sounds, Overlay, About, first-run Setup), `OverlayWindow` + `Controls/OverlayBadge`, `TrayIcon` (right-click menu), one `MainViewModel` split into partial files per page, theme in `Themes/`, composition in `App.axaml.cs` | Talk to the OS only through the `MicControlNG.Platform` interfaces |
+| `MicControlNG.UI` (net10.0) | Avalonia UI: sidebar shell `Views/MainWindow`, tray `Views/TrayIcon` + `Views/TrayPopupWindow`, pages in `Views/Pages/` (Home, Extra hotkeys, Sounds, Overlay, About, first-run Setup), `OverlayWindow` + `Controls/OverlayBadge`, `TrayIcon` (right-click menu), one `MainViewModel` split into partial files per page, theme in `Themes/`, composition in `App.axaml.cs` | Talk to the OS only through the `MicControlNG.Platform` interfaces |
 | `MicControlNG.Windows` | Core Audio via NAudio, low-level keyboard/mouse hooks (`GlobalHotkeyService`, `VirtualKeys`), WASAPI playback, autostart (Run key or scheduled task), overlay click-through | Windows-only code goes here |
 | `MicControlNG` | Windows exe (`MicControlNG.exe`): `Program.cs` (single instance, DI registration of Windows services), Velopack `UpdateService`, `app.manifest` | |
 | `MicControlNG.Tests` | xUnit v3: core tests plus headless Avalonia UI tests (`Ui/`, with fakes in `Ui/Fakes.cs`) | |
 
 ## Product decisions (from the owner)
 - Default mode is Push-to-talk; Toggle and Push-to-mute are alternatives. "Exclusive hotkey" (suppress) is off by default.
-- Closing the window hides to the tray (a one-time hint explains it); exit via the tray menu. "Start in tray" also makes minimize go to the tray.
+- App mode (`window.appMode`): **Tray** (default) starts hidden, including at sign-in; Close and Minimize hide to the tray, with a once-per-session notice that has "Don't show again". **Window** is a normal app: Close exits, Minimize goes to the taskbar. First run always shows the window, for setup.
+- The tray icon is always shown. Left-click never changes state; it opens the quick popup (`TrayPopupWindow`: state, Mute button, level meter, microphone and mode, "Open full window"), positioned only from the screen work area (`PopupPlacement`) so KDE Plasma can reuse it. Right-click: Open · Mute/Unmute · Mode · Microphone · Overlay · Play sounds · App mode · Start with Windows · Exit.
 - Extra hotkeys are a dynamic list of key → action rows; the action list hides whatever the main key already does in the current mode.
 - Overlay is a translucent Discord-style badge, positioned by corner presets or "Edit position" (drag); click-through otherwise.
 - The level meter and speaking indicator open the mic (OS "in use" indicator), so the meter only runs while Home/Setup is visible and the speaking indicator is opt-in.

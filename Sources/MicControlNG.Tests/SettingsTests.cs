@@ -114,6 +114,30 @@ public sealed class SettingsTests : IDisposable
         Assert.False(store.MigratedFromLegacy);
     }
 
+    [Theory]
+    [InlineData(true, AppMode.Tray)]
+    [InlineData(false, AppMode.Window)]
+    public void Load_Version3StartInTray_BecomesAppMode(bool startInTray, AppMode expected)
+    {
+        File.WriteAllText(Path.Combine(directory, SettingsStore.FileName), $$"""{ "version": 3, "setupCompleted": true, "window": { "startInTray": {{(startInTray ? "true" : "false")}} } }""");
+
+        var store = new SettingsStore(directory);
+        var settings = store.Load();
+        store.Save(settings);
+
+        Assert.Equal(expected, settings.Window.AppMode);
+        var json = File.ReadAllText(store.FilePath);
+        Assert.Contains($"\"appMode\": \"{(expected == AppMode.Tray ? "tray" : "window")}\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("startInTray", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppMode_DefaultsToTray()
+    {
+        Assert.Equal(AppMode.Tray, new SettingsStore(directory).Load().Window.AppMode);
+        Assert.Equal(AppMode.Window, SettingsStore.Deserialize("""{ "window": { "appMode": "window" } }""").Window.AppMode);
+    }
+
     [Fact]
     public void Load_CorruptFile_ReturnsDefaultsAndKeepsCopy()
     {
@@ -172,7 +196,7 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal("custom", settings.Notifications.WhenMuted);
         Assert.Equal("Beep300", settings.Notifications.WhenUnmuted);
         Assert.Equal(0.5f, settings.Notifications.Volume);
-        Assert.True(settings.Window.StartInTray);
+        Assert.Equal(AppMode.Tray, settings.Window.AppMode);
         Assert.Equal(new WindowBounds(100, 50, 600, 680), settings.Window.Bounds);
         Assert.Equal(OverlayVisibilityMode.WhenMuted, settings.Overlay.Visibility);
         Assert.Equal(new WindowBounds(10, 20, 120, 120), settings.Overlay.Bounds);

@@ -15,6 +15,7 @@ public sealed partial class MainViewModel
     private IDisposable? levelSession;
     private float latestPeak;
     private bool isWindowVisible;
+    private bool isPopupVisible;
 
     /// <summary>Raised when the overlay should move to its configured corner.</summary>
     public event EventHandler? OverlayPlacementRequested;
@@ -123,6 +124,19 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>Set by the tray popup; the level meter runs while it is open.</summary>
+    public bool IsPopupVisible
+    {
+        get => isPopupVisible;
+        set
+        {
+            if (SetProperty(ref isPopupVisible, value))
+            {
+                UpdateLevelMonitoring();
+            }
+        }
+    }
+
     [RelayCommand]
     private void PlaceOverlay(OverlayCorner corner)
     {
@@ -184,7 +198,7 @@ public sealed partial class MainViewModel
 
     private void UpdateLevelMonitoring()
     {
-        var wanted = (IsWindowVisible && (IsHomePage || !SetupCompleted)) || (ShowSpeakingIndicator && IsOverlayVisible);
+        var wanted = (IsWindowVisible && (IsHomePage || !SetupCompleted)) || IsPopupVisible || (ShowSpeakingIndicator && IsOverlayVisible);
         if (wanted == (levelSession is not null))
         {
             return;

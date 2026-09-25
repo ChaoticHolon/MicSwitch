@@ -8,7 +8,7 @@ public sealed class AppSettings
     /// <summary>Device id meaning "every active device of this kind".</summary>
     public const string AllDevices = "all";
 
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     public int Version { get; set; } = CurrentVersion;
 
@@ -145,13 +145,28 @@ public sealed class WindowSettings
 {
     public WindowBounds? Bounds { get; set; }
 
-    /// <summary>Start hidden in the notification area; minimizing also hides to the tray.</summary>
-    public bool StartInTray { get; set; }
+    public AppMode AppMode { get; set; } = AppMode.Tray;
 
-    /// <summary>The "still running in the tray" hint has been shown after the first close.</summary>
-    public bool TrayHintShown { get; set; }
+    /// <summary>The user ticked "Don't show again" on the "still running in the tray" notice.</summary>
+    public bool TrayNoticeDismissed { get; set; }
+
+    /// <summary>Settings version 3 only; read to choose <see cref="AppMode"/> when upgrading.</summary>
+    [JsonPropertyName("startInTray")]
+    public bool? LegacyStartInTray { get; set; }
 
     public AppTheme Theme { get; set; } = AppTheme.System;
+}
+
+/// <summary>How the app runs: in the notification area, or as a normal window.</summary>
+public enum AppMode
+{
+    /// <summary>Starts hidden in the tray; closing or minimizing the window hides it to the tray.</summary>
+    [JsonStringEnumMemberName("tray")]
+    Tray,
+
+    /// <summary>A normal app: closing the window exits, minimizing goes to the taskbar.</summary>
+    [JsonStringEnumMemberName("window")]
+    Window,
 }
 
 public enum AppTheme

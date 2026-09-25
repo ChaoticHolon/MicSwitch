@@ -85,6 +85,13 @@ public sealed class SettingsStore(string directory, string? legacyDirectory = nu
             settings.Version = AppSettings.CurrentVersion;
         }
 
+        // Version 3 had "Start in tray"; everything older behaved like tray mode.
+        if (settings.Window.LegacyStartInTray is { } startInTray)
+        {
+            settings.Window.AppMode = startInTray ? AppMode.Tray : AppMode.Window;
+            settings.Window.LegacyStartInTray = null;
+        }
+
         return settings;
     }
 

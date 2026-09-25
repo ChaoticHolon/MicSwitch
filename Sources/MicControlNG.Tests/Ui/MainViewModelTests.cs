@@ -154,12 +154,27 @@ public sealed class MainViewModelTests
     }
 
     [AvaloniaFact]
-    public void TrayHint_ShownOnlyOnce()
+    public void TrayNotice_OncePerSession_UntilDismissedForever()
     {
         using var harness = new TestHarness();
 
-        Assert.True(harness.ViewModel.ConsumeTrayHint());
-        Assert.False(harness.ViewModel.ConsumeTrayHint());
+        Assert.True(harness.ViewModel.ShouldShowTrayNotice());
+        Assert.False(harness.ViewModel.ShouldShowTrayNotice());
+        Assert.Contains("right-click the tray icon to exit", harness.ViewModel.TrayNoticeText, StringComparison.OrdinalIgnoreCase);
+
+        harness.ViewModel.DismissTrayNoticeForever();
+        Assert.True(harness.ViewModel.Settings.Window.TrayNoticeDismissed);
+    }
+
+    [AvaloniaFact]
+    public void AppMode_DefaultsToTray_AndCanBeChangedFromSetup()
+    {
+        using var harness = new TestHarness();
+
+        Assert.True(harness.ViewModel.IsTrayMode);
+        harness.ViewModel.SetAppModeCommand.Execute(AppMode.Window);
+        Assert.Equal(AppMode.Window, harness.ViewModel.Settings.Window.AppMode);
+        Assert.Contains("Closing the window exits", harness.ViewModel.AppModeDescription, StringComparison.Ordinal);
     }
 
     [AvaloniaFact]

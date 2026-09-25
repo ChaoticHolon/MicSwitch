@@ -6,14 +6,14 @@ using MicControlNG.ViewModels;
 
 namespace MicControlNG.Views;
 
-/// <summary>Notification-area icon. Click opens the window; right-click offers the everyday controls.</summary>
+/// <summary>Notification-area icon, always shown. Left-click opens the quick popup; right-click shows the full menu.</summary>
 public sealed class TrayIcon : IDisposable
 {
     private static readonly HashSet<string> MenuProperties =
     [
         nameof(MainViewModel.IsMuted), nameof(MainViewModel.MuteMode), nameof(MainViewModel.SelectedMicrophoneId),
         nameof(MainViewModel.OverlayVisibility), nameof(MainViewModel.SoundsEnabled), nameof(MainViewModel.RunAtStartup),
-        nameof(MainViewModel.StartInTray), nameof(MainViewModel.IsOverlayEditing),
+        nameof(MainViewModel.AppMode), nameof(MainViewModel.IsOverlayEditing),
     ];
 
     private readonly Avalonia.Controls.TrayIcon icon;
@@ -21,12 +21,13 @@ public sealed class TrayIcon : IDisposable
     private readonly Action showWindow;
     private readonly Action exit;
 
-    public TrayIcon(Application application, MainViewModel viewModel, Action showWindow, Action exit)
+    /// <param name="togglePopup">Left-click: never changes state, only opens or closes the quick popup.</param>
+    public TrayIcon(Application application, MainViewModel viewModel, Action togglePopup, Action showWindow, Action exit)
     {
         this.viewModel = viewModel;
         this.showWindow = showWindow;
         this.exit = exit;
-        icon = new Avalonia.Controls.TrayIcon { Command = new RelayCommand(showWindow), IsVisible = true };
+        icon = new Avalonia.Controls.TrayIcon { Command = new RelayCommand(togglePopup), IsVisible = true };
         UpdateIcon();
         RebuildMenu();
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -64,6 +65,7 @@ public sealed class TrayIcon : IDisposable
         var vm = viewModel;
         icon.Menu =
         [
+            Item($"Open {MainViewModel.AppName}", showWindow),
             Item(vm.IsMuted == true ? "Unmute microphone" : "Mute microphone", vm.ToggleMuteCommand.Execute),
             new NativeMenuItemSeparator(),
             Submenu("Mode", vm.MuteModes.Select(m => Radio(m.Name, Equals(m.Value, vm.MuteMode), () => vm.MuteMode = (MuteMode)m.Value!))),
@@ -76,10 +78,9 @@ public sealed class TrayIcon : IDisposable
             ]),
             Check("Play sounds", vm.SoundsEnabled, () => vm.SoundsEnabled = !vm.SoundsEnabled),
             new NativeMenuItemSeparator(),
+            Submenu("App mode", vm.AppModes.Select(m => Radio(m.Name, Equals(m.Value, vm.AppMode), () => vm.AppMode = (Settings.AppMode)m.Value!))),
             Check("Start with Windows", vm.RunAtStartup, () => vm.RunAtStartup = !vm.RunAtStartup),
-            Check("Start in tray", vm.StartInTray, () => vm.StartInTray = !vm.StartInTray),
             new NativeMenuItemSeparator(),
-            Item($"Open {MainViewModel.AppName}", showWindow),
             Item("Exit", exit),
         ];
     }

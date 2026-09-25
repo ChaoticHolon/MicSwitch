@@ -70,16 +70,28 @@
                         <c:SettingRow Glyph="&#xE7E8;" Header="Start with Windows">
                             <ToggleSwitch IsChecked="{Binding RunAtStartup}" />
                         </c:SettingRow>
-                        <c:SettingRow Glyph="&#xE73F;" Header="Start in tray" Description="Start hidden in the notification area">
-                            <ToggleSwitch IsChecked="{Binding StartInTray}" />
-                        </c:SettingRow>
+                        <TextBlock Margin="0,16,0,4" FontSize="16" FontWeight="SemiBold" Text="How do you want MicControl to run?" />
+                        <RadioButton GroupName="appMode" IsChecked="{Binding AppMode, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:MainViewModel.TrayAppMode}}"
+                                     Command="{Binding SetAppModeCommand}" CommandParameter="{x:Static vm:MainViewModel.TrayAppMode}">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="In the tray (recommended)" />
+                                <TextBlock Classes="secondary" Text="Runs quietly in the notification area. Closing the window keeps it running." />
+                            </StackPanel>
+                        </RadioButton>
+                        <RadioButton GroupName="appMode" IsChecked="{Binding AppMode, Mode=OneWay, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:MainViewModel.WindowAppMode}}"
+                                     Command="{Binding SetAppModeCommand}" CommandParameter="{x:Static vm:MainViewModel.WindowAppMode}">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="As a window" />
+                                <TextBlock Classes="secondary" Text="A normal app with a taskbar button. Closing the window exits." />
+                            </StackPanel>
+                        </RadioButton>
                     </StackPanel>
 
                     <!-- Done -->
                     <StackPanel Spacing="12" IsVisible="{Binding IsSetupDone}">
                         <TextBlock FontSize="24" FontWeight="SemiBold" Text="You're all set" />
                         <TextBlock FontSize="14" TextWrapping="Wrap" Text="{Binding MainHotkey.Key, StringFormat='Use {0} to talk. Change anything later from Home.'}" IsVisible="{Binding HasMainHotkey}" />
-                        <TextBlock FontSize="14" TextWrapping="Wrap" Text="Tip: right-click the MicControl icon in the notification area (near the clock) for quick controls. Closing this window keeps MicControl running there." />
+                        <TextBlock FontSize="14" TextWrapping="Wrap" Text="Tip: click the MicControl icon in the notification area (near the clock) for quick controls, or right-click it for everything else." />
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">

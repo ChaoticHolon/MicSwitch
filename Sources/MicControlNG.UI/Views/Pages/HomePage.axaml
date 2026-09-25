@@ -76,8 +76,10 @@
         <c:SettingRow Glyph="&#xE7E8;" Header="Start with Windows">
             <ToggleSwitch IsChecked="{Binding RunAtStartup}" AutomationProperties.Name="Start with Windows" />
         </c:SettingRow>
-        <c:SettingRow Glyph="&#xE73F;" Header="Start in tray" Description="Start hidden in the notification area; minimizing also goes to the tray">
-            <ToggleSwitch IsChecked="{Binding StartInTray}" AutomationProperties.Name="Start in tray" />
+        <c:SettingRow Glyph="&#xE73F;" Header="App mode" Description="{Binding AppModeDescription}">
+            <ComboBox MinWidth="200" ItemsSource="{Binding AppModes}" SelectedValue="{Binding AppMode}"
+                      DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}"
+                      AutomationProperties.Name="App mode" />
         </c:SettingRow>
         <c:SettingRow Glyph="&#xE790;" Header="Theme">
             <ComboBox MinWidth="200" ItemsSource="{Binding Themes}" SelectedValue="{Binding Theme}"

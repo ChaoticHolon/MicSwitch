@@ -48,6 +48,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly List<IDisposable> hotkeyRegistrations = [];
     private bool? lastMute;
     private bool isRebinding;
+    private bool trayNoticeShownThisSession;
 
     public MainViewModel(
         SettingsService settingsService,
@@ -350,11 +351,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public bool StartInTray
+    public IReadOnlyList<Choice> AppModes { get; } =
+    [
+        new(AppMode.Tray, "Tray", "Runs in the notification area. Closing or minimizing the window keeps it running there."),
+        new(AppMode.Window, "Window", "A normal app. Closing the window exits; minimizing goes to the taskbar."),
+    ];
+
+    public AppMode AppMode
     {
-        get => Settings.Window.StartInTray;
-        set => SetAndSave(Settings.Window.StartInTray, value, v => Settings.Window.StartInTray = v);
+        get => Settings.Window.AppMode;
+        set
+        {
+            if (SetAndSave(Settings.Window.AppMode, value, v => Settings.Window.AppMode = v))
+            {
+                OnPropertyChanged(nameof(IsTrayMode));
+                OnPropertyChanged(nameof(AppModeDescription));
+            }
+        }
     }
+
+    public bool IsTrayMode => AppMode == AppMode.Tray;
+
+    public string AppModeDescription => AppModes.First(m => Equals(m.Value, AppMode)).Description ?? string.Empty;
 
     [ObservableProperty]
     public partial string? StatusMessage { get; set; }
@@ -362,18 +380,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void DismissStatus() => StatusMessage = null;
 
-    /// <summary>True the first time the window is closed, so the UI can explain that the app keeps running.</summary>
-    public bool ConsumeTrayHint()
+    /// <summary>
+    /// Whether to show the "still running in the tray" notice when the window hides to the tray:
+    /// once per session, unless the user chose "Don't show again".
+    /// </summary>
+    public bool ShouldShowTrayNotice()
     {
-        if (Settings.Window.TrayHintShown)
+        if (Settings.Window.TrayNoticeDismissed || trayNoticeShownThisSession)
         {
             return false;
         }
 
-        Settings.Window.TrayHintShown = true;
-        Save();
+        trayNoticeShownThisSession = true;
         return true;
     }
+
+    public void DismissTrayNoticeForever()
+    {
+        Settings.Window.TrayNoticeDismissed = true;
+        Save();
+    }
+
+    public string TrayNoticeText => $"{AppName} is still running in the tray. Right-click the tray icon to exit.";
 
     public void Dispose()
     {

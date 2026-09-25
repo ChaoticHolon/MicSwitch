@@ -39,6 +39,9 @@ public partial class MainWindow : Window
     /// <summary>Set while the app is shutting down so closing isn't turned into hiding.</summary>
     public bool IsExiting { get; set; }
 
+    /// <summary>Exits the whole app (Window mode closes exit it). Set by the app; tests set a probe.</summary>
+    public Action? ExitApplication { get; set; }
+
     public void ShowAndActivate()
     {
         Show();
@@ -59,11 +62,11 @@ public partial class MainWindow : Window
         }
         else if (change.Property == WindowStateProperty)
         {
-            if (WindowState == WindowState.Minimized && viewModel.StartInTray)
+            if (WindowState == WindowState.Minimized && viewModel.IsTrayMode)
             {
-                // "Start in tray" users expect minimize to tuck the window away too.
+                // Tray mode: minimize hides to the tray instead of the taskbar.
                 WindowState = WindowState.Normal;
-                Hide();
+                HideToTray();
             }
 
             viewModel.IsWindowVisible = IsVisible && WindowState != WindowState.Minimized;
@@ -80,16 +83,30 @@ public partial class MainWindow : Window
 
         if (!IsExiting)
         {
-            // Closing hides to the tray; exit from the tray icon's menu.
-            e.Cancel = true;
-            Hide();
-            if (viewModel.ConsumeTrayHint())
+            if (viewModel.IsTrayMode)
             {
-                new TrayHintWindow().Show();
+                // Tray mode: closing hides to the tray; exit from the tray icon's menu.
+                e.Cancel = true;
+                HideToTray();
+            }
+            else if (ExitApplication is { } exit)
+            {
+                // Window mode: closing exits the app (which closes this window for real).
+                e.Cancel = true;
+                exit();
             }
         }
 
         base.OnClosing(e);
+    }
+
+    private void HideToTray()
+    {
+        Hide();
+        if (viewModel.ShouldShowTrayNotice())
+        {
+            new TrayHintWindow(viewModel).Show();
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

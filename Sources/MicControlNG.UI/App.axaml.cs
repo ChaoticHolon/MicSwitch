@@ -117,7 +117,9 @@ public partial class App : Application
         var viewModel = services.GetRequiredService<MainViewModel>();
         var mainWindow = services.GetRequiredService<MainWindow>();
         desktop.MainWindow = mainWindow;
-        trayIcon = new TrayIcon(this, viewModel, mainWindow.ShowAndActivate, () => Exit(desktop, mainWindow));
+        mainWindow.ExitApplication = () => Exit(desktop, mainWindow);
+        var popup = new TrayPopupWindow(viewModel, mainWindow.ShowAndActivate);
+        trayIcon = new TrayIcon(this, viewModel, popup.Toggle, mainWindow.ShowAndActivate, () => Exit(desktop, mainWindow));
         services.GetRequiredService<OverlayWindow>().SyncVisibility();
         options.RegisterShowRequest?.Invoke(mainWindow.ShowAndActivate);
         desktop.Exit += (_, _) =>
@@ -127,7 +129,8 @@ public partial class App : Application
             host.Dispose();
         };
 
-        if (!(options.IsAutostart || settings.Current.Window.StartInTray))
+        // Tray mode starts hidden (also at sign-in); Window mode is a normal app. First run always shows setup.
+        if (!settings.Current.SetupCompleted || settings.Current.Window.AppMode == AppMode.Window)
         {
             mainWindow.ShowAndActivate();
         }

@@ -119,7 +119,7 @@ public static class LegacyConfigMigrator
         n.Volume = Float(main["NotificationVolume"]) ?? n.Volume;
 
         var w = settings.Window;
-        w.StartInTray = Bool(main["StartMinimized"]) ?? false;
+        w.AppMode = AppMode.Tray;
         w.Bounds = Bounds(main["MainWindowBounds"]);
 
         ApplyOverlay(settings.Overlay, main, iconDirectory);

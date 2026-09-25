@@ -12,9 +12,8 @@
         Width="760" Height="860" MinWidth="560" MinHeight="480"
         Background="{DynamicResource PageBackgroundBrush}"
         WindowStartupLocation="CenterScreen">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel MaxWidth="820" Margin="24,16,24,24">
-
+    <DockPanel Margin="24,16,24,0">
+        <StackPanel DockPanel.Dock="Top" MaxWidth="820">
             <!-- Status -->
             <Border Classes="card" Padding="20">
                 <Grid ColumnDefinitions="Auto,*,Auto">
@@ -53,160 +52,167 @@
                     <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
             </Border>
+        </StackPanel>
 
-            <!-- Microphone -->
-            <TextBlock Classes="section" Text="Microphone" />
-            <c:SettingRow Glyph="&#xE720;" Header="Device" Description="Which microphone the hotkeys control">
-                <ComboBox MinWidth="260" ItemsSource="{Binding Microphones}" SelectedValue="{Binding SelectedMicrophoneId}"
-                          DisplayMemberBinding="{Binding Name, x:DataType=p:AudioDeviceInfo}" SelectedValueBinding="{Binding Id, x:DataType=p:AudioDeviceInfo}" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE765;" Header="Mode" Description="{Binding #ModeBox.((vm:Choice)SelectedItem).Description}">
-                <ComboBox x:Name="ModeBox" MinWidth="200" ItemsSource="{Binding MuteModes}" SelectedValue="{Binding MuteMode}"
-                          DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-            </c:SettingRow>
-            <ContentControl Content="{Binding MainHotkey}" ContentTemplate="{StaticResource HotkeyRowTemplate}" />
-            <c:SettingRow Glyph="&#xE7E8;" Header="State at startup" Description="Applies in Toggle mode" IsEnabled="{Binding IsToggleMode}">
-                <ComboBox MinWidth="200" ItemsSource="{Binding InitialStates}" SelectedValue="{Binding InitialState}"
-                          DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE767;" Header="Set microphone volume" Description="Re-applies this input level at startup and when devices change">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Slider Width="180" Minimum="0" Maximum="100" Value="{Binding MicrophoneVolume}" VerticalAlignment="Center"
-                            IsEnabled="{Binding MicrophoneVolumeControlEnabled}" AutomationProperties.Name="Microphone volume" />
-                    <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding MicrophoneVolume, StringFormat={}{0:0}%}" />
-                    <ToggleSwitch IsChecked="{Binding MicrophoneVolumeControlEnabled}" OnContent="" OffContent="" AutomationProperties.Name="Set microphone volume" />
-                </StackPanel>
-            </c:SettingRow>
-
-            <Expander IsExpanded="{Binding AdvancedHotkeysEnabled, Mode=OneTime}">
-                <Expander.Header>
-                    <DockPanel>
-                        <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding AdvancedHotkeysEnabled}" OnContent="" OffContent="" AutomationProperties.Name="Enable additional hotkeys" />
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Additional hotkeys" />
-                            <TextBlock Classes="secondary" Text="Separate keys for toggle, mute, unmute, push-to-talk and push-to-mute" />
-                        </StackPanel>
-                    </DockPanel>
-                </Expander.Header>
-                <ItemsControl ItemsSource="{Binding AdvancedHotkeys}" ItemTemplate="{StaticResource HotkeyRowTemplate}" IsEnabled="{Binding AdvancedHotkeysEnabled}" />
-            </Expander>
-
-            <!-- Sounds -->
-            <TextBlock Classes="section" Text="Sounds" />
-            <c:SettingRow Glyph="&#xE74F;" Header="When muted">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ComboBox MinWidth="200" ItemsSource="{Binding SoundOptions}" SelectedValue="{Binding SoundWhenMuted}"
-                              DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-                    <Button Padding="8" FontFamily="{StaticResource IconFont}" Content="&#xE768;" ToolTip.Tip="Preview"
-                            Command="{Binding PlaySoundCommand}" CommandParameter="{Binding SoundWhenMuted}" AutomationProperties.Name="Preview muted sound" />
-                </StackPanel>
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE767;" Header="When live">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <ComboBox MinWidth="200" ItemsSource="{Binding SoundOptions}" SelectedValue="{Binding SoundWhenUnmuted}"
-                              DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-                    <Button Padding="8" FontFamily="{StaticResource IconFont}" Content="&#xE768;" ToolTip.Tip="Preview"
-                            Command="{Binding PlaySoundCommand}" CommandParameter="{Binding SoundWhenUnmuted}" AutomationProperties.Name="Preview live sound" />
-                </StackPanel>
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE995;" Header="Volume">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Slider Width="200" Minimum="0" Maximum="100" Value="{Binding NotificationVolume}" VerticalAlignment="Center" AutomationProperties.Name="Notification volume" />
-                    <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding NotificationVolume, StringFormat={}{0:0}%}" />
-                </StackPanel>
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE7F5;" Header="Play through">
-                <ComboBox MinWidth="260" ItemsSource="{Binding PlaybackDevices}" SelectedValue="{Binding PlaybackDeviceId}"
-                          DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE710;" Header="Custom sounds" Description="Add a WAV, MP3 or other audio file">
-                <Button Content="Add sound…" Command="{Binding AddSoundCommand}" />
-            </c:SettingRow>
-
-            <!-- Overlay -->
-            <TextBlock Classes="section" Text="Overlay" />
-            <c:SettingRow Glyph="&#xE7F4;" Header="Show overlay" Description="An always-on-top indicator of the microphone state">
-                <ComboBox MinWidth="200" ItemsSource="{Binding OverlayVisibilityModes}" SelectedValue="{Binding OverlayVisibility}"
-                          DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE72E;" Header="Move and resize" Description="While unlocked, drag the overlay and its corner; double-click it to lock" IsEnabled="{Binding IsOverlayEnabled}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="Reset position" Command="{Binding ResetOverlayPositionCommand}" />
-                    <ToggleSwitch IsChecked="{Binding IsOverlayUnlocked}" OnContent="Unlocked" OffContent="Locked" AutomationProperties.Name="Unlock overlay" />
-                </StackPanel>
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE790;" Header="Opacity" IsEnabled="{Binding IsOverlayEnabled}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Slider Width="200" Minimum="0.1" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding OverlayOpacity}" VerticalAlignment="Center" AutomationProperties.Name="Overlay opacity" />
-                    <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding OverlayOpacity, StringFormat={}{0:P0}}" />
-                </StackPanel>
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xEB9F;" Header="Icons" Description="Click an icon to replace it. Also used for the tray icon.">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Padding="6" Command="{Binding SelectMutedIconCommand}" ToolTip.Tip="Muted icon" AutomationProperties.Name="Choose muted icon">
-                        <Image Source="{Binding MutedIcon}" Width="28" Height="28" RenderOptions.BitmapInterpolationMode="HighQuality" />
-                    </Button>
-                    <Button Padding="6" Command="{Binding SelectUnmutedIconCommand}" ToolTip.Tip="Live icon" AutomationProperties.Name="Choose live icon">
-                        <Image Source="{Binding UnmutedIcon}" Width="28" Height="28" RenderOptions.BitmapInterpolationMode="HighQuality" />
-                    </Button>
-                    <Button Content="Reset" Command="{Binding ResetIconsCommand}" />
-                </StackPanel>
-            </c:SettingRow>
-
-            <!-- Speakers -->
-            <TextBlock Classes="section" Text="Speakers" />
-            <Expander IsExpanded="{Binding SpeakerControlEnabled, Mode=OneTime}">
-                <Expander.Header>
-                    <DockPanel>
-                        <ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding SpeakerControlEnabled}" OnContent="" OffContent="" AutomationProperties.Name="Enable speaker hotkeys" />
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="Speaker hotkeys" />
-                            <TextBlock Classes="secondary" Text="Mute and change output volume with hotkeys; the overlay briefly shows the level" />
-                        </StackPanel>
-                    </DockPanel>
-                </Expander.Header>
-                <StackPanel IsEnabled="{Binding SpeakerControlEnabled}">
-                    <c:SettingRow Glyph="&#xE7F5;" Header="Device">
-                        <ComboBox MinWidth="260" ItemsSource="{Binding Speakers}" SelectedValue="{Binding SelectedSpeakerId}"
+        <TabControl Classes="pages" MaxWidth="820">
+            <TabItem Header="Microphone">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="page">
+                    <c:SettingRow Glyph="&#xE720;" Header="Device" Description="Which microphone the hotkeys control">
+                        <ComboBox MinWidth="260" ItemsSource="{Binding Microphones}" SelectedValue="{Binding SelectedMicrophoneId}"
                                   DisplayMemberBinding="{Binding Name, x:DataType=p:AudioDeviceInfo}" SelectedValueBinding="{Binding Id, x:DataType=p:AudioDeviceInfo}" />
                     </c:SettingRow>
-                    <c:SettingRow Glyph="&#xE767;" Header="Volume">
+                    <c:SettingRow Glyph="&#xE765;" Header="Mode" Description="{Binding #ModeBox.((vm:Choice)SelectedItem).Description}">
+                        <ComboBox x:Name="ModeBox" MinWidth="200" ItemsSource="{Binding MuteModes}" SelectedValue="{Binding MuteMode}"
+                                  DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                    </c:SettingRow>
+                    <ContentControl Content="{Binding MainHotkey}" ContentTemplate="{StaticResource HotkeyRowTemplate}" />
+                    <c:SettingRow Glyph="&#xE7E8;" Header="State at startup" Description="Applies in Toggle mode" IsEnabled="{Binding IsToggleMode}">
+                        <ComboBox MinWidth="200" ItemsSource="{Binding InitialStates}" SelectedValue="{Binding InitialState}"
+                                  DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE767;" Header="Set microphone volume" Description="Re-applies this input level at startup and when devices change">
                         <StackPanel Orientation="Horizontal" Spacing="8">
-                            <Slider Width="200" Minimum="0" Maximum="100" Value="{Binding SpeakerVolume}" VerticalAlignment="Center" AutomationProperties.Name="Speaker volume" />
-                            <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding SpeakerVolume, StringFormat={}{0:0}%}" />
+                            <Slider Width="180" Minimum="0" Maximum="100" Value="{Binding MicrophoneVolume}" VerticalAlignment="Center"
+                                    IsEnabled="{Binding MicrophoneVolumeControlEnabled}" AutomationProperties.Name="Microphone volume" />
+                            <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding MicrophoneVolume, StringFormat={}{0:0}%}" />
+                            <ToggleSwitch IsChecked="{Binding MicrophoneVolumeControlEnabled}" AutomationProperties.Name="Set microphone volume" />
                         </StackPanel>
                     </c:SettingRow>
-                    <ItemsControl ItemsSource="{Binding SpeakerHotkeys}" ItemTemplate="{StaticResource HotkeyRowTemplate}" />
-                </StackPanel>
-            </Expander>
-
-            <!-- General -->
-            <TextBlock Classes="section" Text="General" />
-            <c:SettingRow Glyph="&#xE790;" Header="Theme">
-                <ComboBox MinWidth="200" ItemsSource="{Binding Themes}" SelectedValue="{Binding Theme}"
-                          DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE7E8;" Header="Start with Windows">
-                <ToggleSwitch IsChecked="{Binding RunAtStartup}" AutomationProperties.Name="Start with Windows" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE73F;" Header="Start minimized to the notification area">
-                <ToggleSwitch IsChecked="{Binding StartMinimized}" AutomationProperties.Name="Start minimized" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE8BB;" Header="Closing the window keeps MicSwitch running" Description="Exit from the notification area icon">
-                <ToggleSwitch IsChecked="{Binding MinimizeOnClose}" AutomationProperties.Name="Keep running when closed" />
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE895;" Header="Check for updates at startup">
-                <StackPanel Orientation="Horizontal" Spacing="16">
-                    <Button Content="Check now" Command="{Binding CheckUpdatesCommand}" />
-                    <ToggleSwitch IsChecked="{Binding CheckForUpdates}" AutomationProperties.Name="Check for updates at startup" />
-                </StackPanel>
-            </c:SettingRow>
-            <c:SettingRow Glyph="&#xE946;" Header="About" Description="{Binding VersionText}">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Content="Open settings folder" Command="{Binding OpenDataFolderCommand}" />
-                    <Button Content="Project page" Command="{Binding OpenProjectPageCommand}" />
-                </StackPanel>
-            </c:SettingRow>
-        </StackPanel>
-    </ScrollViewer>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Hotkeys">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="page">
+                    <c:SettingRow Glyph="&#xE765;" Header="Additional hotkeys" Description="Separate keys for toggle, mute, unmute, push-to-talk and push-to-mute">
+                        <ToggleSwitch IsChecked="{Binding AdvancedHotkeysEnabled}" AutomationProperties.Name="Enable additional hotkeys" />
+                    </c:SettingRow>
+                    <ItemsControl ItemsSource="{Binding AdvancedHotkeys}" ItemTemplate="{StaticResource HotkeyRowTemplate}" IsEnabled="{Binding AdvancedHotkeysEnabled}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Sounds">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="page">
+                    <c:SettingRow Glyph="&#xE74F;" Header="When muted">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ComboBox MinWidth="200" ItemsSource="{Binding SoundOptions}" SelectedValue="{Binding SoundWhenMuted}"
+                                      DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                            <Button Padding="8" FontFamily="{StaticResource IconFont}" Content="&#xE768;" ToolTip.Tip="Preview"
+                                    Command="{Binding PlaySoundCommand}" CommandParameter="{Binding SoundWhenMuted}" AutomationProperties.Name="Preview muted sound" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE767;" Header="When live">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ComboBox MinWidth="200" ItemsSource="{Binding SoundOptions}" SelectedValue="{Binding SoundWhenUnmuted}"
+                                      DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                            <Button Padding="8" FontFamily="{StaticResource IconFont}" Content="&#xE768;" ToolTip.Tip="Preview"
+                                    Command="{Binding PlaySoundCommand}" CommandParameter="{Binding SoundWhenUnmuted}" AutomationProperties.Name="Preview live sound" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE995;" Header="Volume">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Slider Width="200" Minimum="0" Maximum="100" Value="{Binding NotificationVolume}" VerticalAlignment="Center" AutomationProperties.Name="Notification volume" />
+                            <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding NotificationVolume, StringFormat={}{0:0}%}" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE7F5;" Header="Play through">
+                        <ComboBox MinWidth="260" ItemsSource="{Binding PlaybackDevices}" SelectedValue="{Binding PlaybackDeviceId}"
+                                  DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE710;" Header="Custom sounds" Description="Add a WAV, MP3 or other audio file">
+                        <Button Content="Add sound…" Command="{Binding AddSoundCommand}" />
+                    </c:SettingRow>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Overlay">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="page">
+                    <c:SettingRow Glyph="&#xE7F4;" Header="Show overlay" Description="An always-on-top indicator of the microphone state">
+                        <ComboBox MinWidth="200" ItemsSource="{Binding OverlayVisibilityModes}" SelectedValue="{Binding OverlayVisibility}"
+                                  DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE72E;" Header="Move and resize" Description="While unlocked, drag the overlay and its corner; double-click it to lock" IsEnabled="{Binding IsOverlayEnabled}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Reset position" Command="{Binding ResetOverlayPositionCommand}" />
+                            <ToggleSwitch IsChecked="{Binding IsOverlayUnlocked}" OnContent="Unlocked" OffContent="Locked" AutomationProperties.Name="Unlock overlay" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE790;" Header="Opacity" IsEnabled="{Binding IsOverlayEnabled}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Slider Width="200" Minimum="0.1" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding OverlayOpacity}" VerticalAlignment="Center" AutomationProperties.Name="Overlay opacity" />
+                            <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding OverlayOpacity, StringFormat={}{0:P0}}" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xEB9F;" Header="Icons" Description="Click an icon to replace it. Also used for the tray icon.">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Padding="6" Command="{Binding SelectMutedIconCommand}" ToolTip.Tip="Muted icon" AutomationProperties.Name="Choose muted icon">
+                                <Image Source="{Binding MutedIcon}" Width="28" Height="28" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                            </Button>
+                            <Button Padding="6" Command="{Binding SelectUnmutedIconCommand}" ToolTip.Tip="Live icon" AutomationProperties.Name="Choose live icon">
+                                <Image Source="{Binding UnmutedIcon}" Width="28" Height="28" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                            </Button>
+                            <Button Content="Reset" Command="{Binding ResetIconsCommand}" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="Speakers">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="page">
+                    <c:SettingRow Glyph="&#xE767;" Header="Speaker hotkeys" Description="Mute and change output volume with hotkeys; the overlay briefly shows the level">
+                        <ToggleSwitch IsChecked="{Binding SpeakerControlEnabled}" AutomationProperties.Name="Enable speaker hotkeys" />
+                    </c:SettingRow>
+                    <StackPanel IsEnabled="{Binding SpeakerControlEnabled}">
+                        <c:SettingRow Glyph="&#xE7F5;" Header="Device">
+                            <ComboBox MinWidth="260" ItemsSource="{Binding Speakers}" SelectedValue="{Binding SelectedSpeakerId}"
+                                      DisplayMemberBinding="{Binding Name, x:DataType=p:AudioDeviceInfo}" SelectedValueBinding="{Binding Id, x:DataType=p:AudioDeviceInfo}" />
+                        </c:SettingRow>
+                        <c:SettingRow Glyph="&#xE767;" Header="Volume">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Slider Width="200" Minimum="0" Maximum="100" Value="{Binding SpeakerVolume}" VerticalAlignment="Center" AutomationProperties.Name="Speaker volume" />
+                                <TextBlock Width="44" TextAlignment="Right" VerticalAlignment="Center" Text="{Binding SpeakerVolume, StringFormat={}{0:0}%}" />
+                            </StackPanel>
+                        </c:SettingRow>
+                        <ItemsControl ItemsSource="{Binding SpeakerHotkeys}" ItemTemplate="{StaticResource HotkeyRowTemplate}" />
+                    </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+            <TabItem Header="General">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Classes="page">
+                    <c:SettingRow Glyph="&#xE790;" Header="Theme">
+                        <ComboBox MinWidth="200" ItemsSource="{Binding Themes}" SelectedValue="{Binding Theme}"
+                                  DisplayMemberBinding="{Binding Name, x:DataType=vm:Choice}" SelectedValueBinding="{Binding Value, x:DataType=vm:Choice}" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE7E8;" Header="Start with Windows">
+                        <ToggleSwitch IsChecked="{Binding RunAtStartup}" AutomationProperties.Name="Start with Windows" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE73F;" Header="Start minimized to the notification area">
+                        <ToggleSwitch IsChecked="{Binding StartMinimized}" AutomationProperties.Name="Start minimized" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE8BB;" Header="Closing the window keeps MicSwitch running" Description="Exit from the notification area icon">
+                        <ToggleSwitch IsChecked="{Binding MinimizeOnClose}" AutomationProperties.Name="Keep running when closed" />
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE895;" Header="Check for updates at startup">
+                        <StackPanel Orientation="Horizontal" Spacing="16">
+                            <Button Content="Check now" Command="{Binding CheckUpdatesCommand}" />
+                            <ToggleSwitch IsChecked="{Binding CheckForUpdates}" AutomationProperties.Name="Check for updates at startup" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    <c:SettingRow Glyph="&#xE946;" Header="About" Description="{Binding VersionText}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Open settings folder" Command="{Binding OpenDataFolderCommand}" />
+                            <Button Content="Project page" Command="{Binding OpenProjectPageCommand}" />
+                        </StackPanel>
+                    </c:SettingRow>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
 </Window>

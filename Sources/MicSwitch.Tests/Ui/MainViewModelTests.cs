@@ -91,4 +91,18 @@ public sealed class MainViewModelTests
         Assert.Contains(harness.ViewModel.Microphones, d => d.Id == "mic-1" && d.Name == "Disconnected device");
         Assert.Equal("mic-1", harness.ViewModel.SelectedMicrophoneId);
     }
+
+    [AvaloniaFact]
+    public void SoundAndPlaybackDropdowns_HaveMatchingSelections()
+    {
+        using var harness = new TestHarness(s => s.Notifications.WhenMuted = "beep750");
+
+        Assert.Equal("Beep750", harness.ViewModel.SoundWhenMuted);
+        Assert.Contains(harness.ViewModel.SoundOptions, o => Equals(o.Value, harness.ViewModel.SoundWhenMuted));
+        Assert.Equal(string.Empty, harness.ViewModel.PlaybackDeviceId);
+        Assert.Contains(harness.ViewModel.PlaybackDevices, o => Equals(o.Value, string.Empty) && o.Name == "Default device");
+
+        harness.ViewModel.SoundWhenUnmuted = string.Empty;
+        Assert.Null(harness.ViewModel.Settings.Notifications.WhenUnmuted);
+    }
 }

@@ -40,6 +40,24 @@ public sealed class MainWindowTests
     }
 
     [AvaloniaFact]
+    public void Window_HasSettingsTabs()
+    {
+        using var harness = new TestHarness();
+        var window = new MainWindow(harness.ViewModel, harness.Settings);
+        window.Show();
+
+        var tabs = window.GetVisualDescendants().OfType<TabControl>().Single();
+        Assert.Equal(["Microphone", "Hotkeys", "Sounds", "Overlay", "Speakers", "General"], tabs.Items.OfType<TabItem>().Select(t => t.Header as string));
+
+        foreach (var tab in tabs.Items.OfType<TabItem>())
+        {
+            tabs.SelectedItem = tab;
+            window.UpdateLayout();
+            Assert.NotEmpty(window.GetVisualDescendants().OfType<SettingRow>());
+        }
+    }
+
+    [AvaloniaFact]
     public void Theme_Switches()
     {
         using var harness = new TestHarness();

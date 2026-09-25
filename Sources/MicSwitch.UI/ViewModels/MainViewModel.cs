@@ -249,16 +249,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<Choice> PlaybackDevices { get; } = [];
 
-    public string? SoundWhenMuted
+    // Dropdown values use "" for "None"/"Default device": a null SelectedValue would show an empty selection.
+    public string SoundWhenMuted
     {
-        get => Settings.Notifications.WhenMuted;
-        set => SetAndSave(Settings.Notifications.WhenMuted, value, v => Settings.Notifications.WhenMuted = v);
+        get => Settings.Notifications.WhenMuted ?? string.Empty;
+        set => SetAndSave(Settings.Notifications.WhenMuted, NullIfEmpty(value), v => Settings.Notifications.WhenMuted = v);
     }
 
-    public string? SoundWhenUnmuted
+    public string SoundWhenUnmuted
     {
-        get => Settings.Notifications.WhenUnmuted;
-        set => SetAndSave(Settings.Notifications.WhenUnmuted, value, v => Settings.Notifications.WhenUnmuted = v);
+        get => Settings.Notifications.WhenUnmuted ?? string.Empty;
+        set => SetAndSave(Settings.Notifications.WhenUnmuted, NullIfEmpty(value), v => Settings.Notifications.WhenUnmuted = v);
     }
 
     /// <summary>Notification volume in percent.</summary>
@@ -268,14 +269,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         set => SetAndSave(Settings.Notifications.Volume, (float)(value / 100), v => Settings.Notifications.Volume = v);
     }
 
-    public string? PlaybackDeviceId
+    public string PlaybackDeviceId
     {
-        get => Settings.Notifications.OutputDeviceId;
-        set => SetAndSave(Settings.Notifications.OutputDeviceId, value, v => Settings.Notifications.OutputDeviceId = v);
+        get => Settings.Notifications.OutputDeviceId ?? string.Empty;
+        set => SetAndSave(Settings.Notifications.OutputDeviceId, NullIfEmpty(value), v => Settings.Notifications.OutputDeviceId = v);
     }
 
     [RelayCommand]
-    private Task PlaySound(string? name) => sounds.PlayAsync(name ?? SoundWhenMuted ?? SoundWhenUnmuted, Settings.Notifications.Volume, PlaybackDeviceId);
+    private Task PlaySound(string? name) => PlayNotification(NullIfEmpty(name) ?? Settings.Notifications.WhenMuted ?? Settings.Notifications.WhenUnmuted);
 
     [RelayCommand]
     private async Task AddSound()
@@ -290,7 +291,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var name = await Task.Run(() => sounds.Add(file));
             RefreshSounds();
-            SoundWhenMuted ??= name;
+            if (Settings.Notifications.WhenMuted is null)
+            {
+                SoundWhenMuted = name;
+            }
             StatusMessage = $"Added sound \"{name}\".";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or InvalidOperationException)
@@ -656,7 +660,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var mute = microphone.Mute;
         if (!isRebinding && lastMute is not null && mute is not null && mute != lastMute)
         {
-            _ = sounds.PlayAsync(mute.Value ? SoundWhenMuted : SoundWhenUnmuted, Settings.Notifications.Volume, PlaybackDeviceId);
+            _ = PlayNotification(mute.Value ? Settings.Notifications.WhenMuted : Settings.Notifications.WhenUnmuted);
         }
 
         lastMute = mute ?? lastMute;
@@ -695,10 +699,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Replace(Microphones, [new(AppSettings.AllDevices, "All microphones"), .. deviceService.GetDevices(AudioFlow.Capture)], SelectedMicrophoneId, nameof(SelectedMicrophoneId));
         var outputs = deviceService.GetDevices(AudioFlow.Render);
         Replace(Speakers, [new(AppSettings.AllDevices, "All speakers"), .. outputs], SelectedSpeakerId, nameof(SelectedSpeakerId));
-        var playbackId = PlaybackDeviceId;
+        var playbackId = Settings.Notifications.OutputDeviceId;
         PlaybackDevices.Clear();
-        PlaybackDevices.Add(new(null, "Default device"));
+        PlaybackDevices.Add(new(string.Empty, "Default device"));
         outputs.ToList().ForEach(d => PlaybackDevices.Add(new(d.Id, d.Name)));
+        if (playbackId is not null && outputs.All(d => d.Id != playbackId))
+        {
+            PlaybackDevices.Add(new(playbackId, "Disconnected device"));
+        }
+
         Settings.Notifications.OutputDeviceId = playbackId;
         OnPropertyChanged(nameof(PlaybackDeviceId));
         OnPropertyChanged(nameof(MicrophoneStatusDetail));
@@ -719,11 +728,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void RefreshSounds()
     {
-        var (muted, unmuted) = (SoundWhenMuted, SoundWhenUnmuted);
+        var (muted, unmuted) = (Settings.Notifications.WhenMuted, Settings.Notifications.WhenUnmuted);
+        var names = sounds.GetNames();
         SoundOptions.Clear();
-        SoundOptions.Add(new(null, "None"));
-        sounds.GetNames().ToList().ForEach(n => SoundOptions.Add(new(n, n)));
-        (Settings.Notifications.WhenMuted, Settings.Notifications.WhenUnmuted) = (muted, unmuted);
+        SoundOptions.Add(new(string.Empty, "None"));
+        names.ToList().ForEach(n => SoundOptions.Add(new(n, n)));
+
+        // Sound names are case-insensitive (they're file names); use the listed spelling so the dropdown matches.
+        (Settings.Notifications.WhenMuted, Settings.Notifications.WhenUnmuted) = (Canonical(muted), Canonical(unmuted));
+
+        string? Canonical(string? name) => names.FirstOrDefault(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase)) ?? name;
         OnPropertyChanged(nameof(SoundWhenMuted));
         OnPropertyChanged(nameof(SoundWhenUnmuted));
     }
@@ -785,6 +799,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     }
 
     private void Save() => settingsService.ScheduleSave();
+
+    private Task PlayNotification(string? name) => sounds.PlayAsync(name, Settings.Notifications.Volume, Settings.Notifications.OutputDeviceId);
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     private bool SetAndSave<T>(T current, T value, Action<T> assign, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
     {

@@ -38,8 +38,12 @@
     <Style Selector="Border.badge.live">
         <Setter Property="Background" Value="{StaticResource LiveBrush}" />
     </Style>
-    <Style Selector="Expander">
-        <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="Margin" Value="0,0,0,4" />
+    <Style Selector="TabControl.pages > TabItem">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="MinHeight" Value="36" />
+    </Style>
+    <Style Selector="StackPanel.page">
+        <Setter Property="Margin" Value="0,12,0,24" />
     </Style>
 </Styles>
